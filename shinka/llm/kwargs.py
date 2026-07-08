@@ -3,6 +3,7 @@ import random
 from .providers.pricing import (
     is_reasoning_model,
     has_fixed_temperature,
+    disallows_temperature,
     requires_reasoning,
 )
 from .providers.model_resolver import resolve_model_backend
@@ -113,7 +114,9 @@ def sample_model_kwargs(
         r_effort = "low"
 
     # 3. SAMPLE: temperature with possible reasoning restrictions
-    if has_fixed_temperature(api_model_name) and (
+    if disallows_temperature(api_model_name):
+        pass  # newer Anthropic models reject `temperature` entirely — omit the key
+    elif has_fixed_temperature(api_model_name) and (
         r_effort != "disabled" or provider in ("openai", "openrouter", "azure_openai")
     ):
         kwargs_dict["temperature"] = 1.0

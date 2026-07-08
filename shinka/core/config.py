@@ -46,6 +46,12 @@ class EvolutionConfig:
     novelty_llm_kwargs: dict = field(default_factory=lambda: {})
     use_text_feedback: bool = False
     max_api_costs: Optional[float] = None
+    # Subscription (headless/claude) usage gating: pause new proposals when the
+    # 5-hour window utilization reaches the threshold (fraction 0-1; values >1
+    # are read as percent). None disables. Weekly-limit exhaustion stops new
+    # proposals for the rest of the run instead of pausing.
+    subscription_pause_threshold: Optional[float] = 0.95
+    subscription_usage_poll_interval: float = 60.0
     inspiration_sort_order: str = "ascending"
     enable_controlled_oversubscription: bool = False
     proposal_target_mode: str = "adaptive"

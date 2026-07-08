@@ -174,6 +174,24 @@ def has_fixed_temperature(model_name: str) -> bool:
     return _PRICING_DF.loc[model_name, "think_temp_fixed"]
 
 
+# Newer Anthropic models reject the `temperature` parameter outright
+# (Sonnet 5, Opus 4.7/4.8, Fable 5, incl. their Bedrock IDs).
+_NO_TEMPERATURE_MODELS = frozenset({
+    "claude-sonnet-5",
+    "us.anthropic.claude-sonnet-5-v1:0",
+    "claude-opus-4-7",
+    "anthropic.claude-opus-4-7",
+    "claude-opus-4-8",
+    "anthropic.claude-opus-4-8",
+    "claude-fable-5",
+})
+
+
+def disallows_temperature(model_name: str) -> bool:
+    """Check if a model rejects the `temperature` parameter entirely."""
+    return model_name in _NO_TEMPERATURE_MODELS
+
+
 def requires_reasoning(model_name: str) -> bool:
     """Check if a model requires reasoning effort to be set."""
     if model_name not in _PRICING_DF.index:

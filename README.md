@@ -18,6 +18,8 @@
 
 ---
 
+**Jul 2026 Update**: `headless/claude` subscription runs now self-throttle against your Claude usage limits. Shinka reads your local Claude Code credentials to check the 5-hour and weekly usage windows (the same data as Claude Code's `/usage`), pauses new proposals before they would hit a limit — printing a console notice — and auto-resumes when the window resets. Configure via `subscription_pause_threshold` / `subscription_usage_poll_interval`; otherwise-untracked subscription calls are also backfilled with token/cost estimates so `max_api_costs` budgets still apply. See [Subscription Usage Gating](#subscription-usage-gating-headlessclaude).
+
 **May 2026 Update**: Added [Headless](https://github.com/RobertTLange/headless-cli) CLI-backed mutation models for subscription-backed agent usage. Use model strings such as `headless/codex@gpt-5.5?effort=high` or `headless/claude`. Check the [example](https://github.com/SakanaAI/ShinkaEvolve/tree/main/examples/sine_approx_headless) for more detail.
 
 **Apr 2026 Update**: Added the new [documentation website](https://sakanaai.github.io/ShinkaEvolve/) with guides for getting started, configuration, async evolution, local models, WebUI usage, and agentic workflows.
@@ -191,6 +193,8 @@ Class defaults below come from `shinka/core/config.py` (`EvolutionConfig`). Hydr
 | `novelty_llm_kwargs` | `{}` | `dict` | Kwargs for novelty LLMs |
 | `use_text_feedback` | `False` | `bool` | Whether to use text feedback in evolution |
 | `max_api_costs` | `None` | `Optional[float]` | Total API budget cap (USD); async runner stops new proposals at cap |
+| `subscription_pause_threshold` | `0.95` | `Optional[float]` | For `headless/claude` models: pause new proposals when the Claude subscription 5h window reaches this utilization (fraction 0-1 or percent >1); weekly-cap exhaustion stops new proposals. `None` disables. |
+| `subscription_usage_poll_interval` | `60.0` | `float` | Seconds to cache Claude subscription usage lookups between checks |
 | `enable_controlled_oversubscription` | `False` | `bool` | Enable bounded proposal oversubscription when proposal generation is slower than evaluation. |
 | `proposal_target_mode` | `'adaptive'` | `str` | Proposal target controller mode (`adaptive` or `fixed`). |
 | `proposal_target_min_samples` | `5` | `int` | Minimum completed timing samples before adaptive targeting activates. |
@@ -452,6 +456,26 @@ For a Python runner using both Codex and Claude through Headless:
 python examples/sine_approx_headless/run_evo.py
 ```
 
+### Subscription Usage Gating (`headless/claude`)
+
+When you drive Claude mutations through Headless on a Claude subscription (`headless/claude`), Shinka watches your usage limits so a run doesn't burn generations on calls that are guaranteed to fail:
+
+- **Credentials-based check.** Before dispatching proposals, Shinka reads your local Claude Code credentials (`~/.claude/.credentials.json`) and queries the same usage endpoint as Claude Code's `/usage` view to read your **5-hour** and **weekly** window utilization. Nothing is stored or sent anywhere else — the token is only used to read your own usage.
+- **Proactive pause.** When the 5-hour window reaches `subscription_pause_threshold` (default `0.95`), new proposals pause until the window resets, then resume automatically. Weekly-cap exhaustion stops new proposals for the rest of the run (in-flight evaluations still finish), mirroring the `max_api_costs` behavior.
+- **Reactive fallback.** If a call still returns a "usage limit reached" error, Shinka records it, parses the reset time from the error, and pauses until then.
+- **Console notification.** Each time the gate engages you get a log line with the current utilization and the resume time, e.g. `Subscription usage gate: 5h window at 96% (threshold 95%). Pausing new proposals for 42.0 min (until 2026-07-08 14:30:00).`
+- **Fails open.** If credentials or the endpoint are unavailable (no login, expired token, network error), gating simply switches off — a run is never blocked by a missing token.
+
+Cost estimation ties in here too: subscription-backed calls report zero tokens from the CLI, so Shinka backfills them with heuristic token/cost estimates, keeping `max_api_costs` budgets and cost reporting meaningful for these runs.
+
+Tune the behavior with two `EvolutionConfig` keys:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `subscription_pause_threshold` | `0.95` | Utilization at which to gate (fraction `0-1` or percent `>1`). `None` disables gating entirely. |
+| `subscription_usage_poll_interval` | `60.0` | Seconds to cache usage lookups between checks, so tight loops don't hammer the endpoint. |
+
+Gating applies only to `headless/claude` (subscription-backed) models and is independent of `max_api_costs`, which caps USD spend for API-key models.
 
 ## Interactive WebUI 🎨
 

@@ -16,7 +16,16 @@ from urllib.parse import parse_qs
 from pydantic import BaseModel
 
 from shinka.llm.constants import TIMEOUT
+from shinka.llm.subscription_usage import (
+    SubscriptionLimitError,
+    active_limit_pause,
+    looks_like_limit_error,
+    parse_limit_reset_epoch,
+    record_limit_hit,
+)
+from shinka.llm.token_estimate import estimate_tokens_blended
 
+from .pricing import calculate_cost, model_exists
 from .result import QueryResult
 
 DEFAULT_HEADLESS_COMMAND = "npx -y @roberttlange/headless"
@@ -201,6 +210,37 @@ def _is_transient_claude_credit_error(
     return "Credit balance is too low" in output and '"pricingSource":"models.dev"' in output
 
 
+def _raise_if_limit_paused(model: HeadlessModel) -> None:
+    """Fail fast (no CLI spawn) while a subscription limit pause is in force.
+
+    Only the runner clears the pause; failing here keeps in-flight patch
+    retries from wasting quota and subprocess spawns on doomed calls.
+    """
+    if model.agent != "claude":
+        return
+    pause_until = active_limit_pause()
+    if pause_until is not None:
+        raise SubscriptionLimitError(
+            "Claude subscription usage window is exhausted; "
+            "skipping call until the window resets.",
+            resets_at=None if pause_until == float("inf") else pause_until,
+        )
+
+
+def _raise_for_failed_query(
+    model: HeadlessModel, completed: subprocess.CompletedProcess
+) -> None:
+    detail = completed.stderr.strip() or completed.stdout.strip()
+    if model.agent == "claude" and looks_like_limit_error(detail):
+        resets_at = parse_limit_reset_epoch(detail)
+        record_limit_hit(resets_at)
+        raise SubscriptionLimitError(
+            f"Claude subscription usage limit reached: {detail}",
+            resets_at=resets_at,
+        )
+    raise RuntimeError(f"Headless query failed: {detail}")
+
+
 def _run_headless_command_sync(
     *,
     model: HeadlessModel,
@@ -347,6 +387,38 @@ def _parse_stdout(stdout: str) -> tuple[str, dict[str, Any]]:
     return content, usage
 
 
+def _msg_history_text(msg_history: list[dict]) -> str:
+    """Concatenate the text of prior turns for input-token estimation."""
+    parts: list[str] = []
+    for turn in msg_history:
+        content = turn.get("content") if isinstance(turn, dict) else None
+        if isinstance(content, str):
+            parts.append(content)
+        elif isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    parts.append(item["text"])
+    return "\n".join(parts)
+
+
+def _pricing_model_name(usage: dict[str, Any], model: str) -> str | None:
+    """Resolve a name present in the pricing table, for cost estimation.
+
+    Prefers the concrete model the agent reports (e.g. ``claude-opus-4-6``),
+    falling back to the ``@model`` in a ``headless/agent@model`` route.
+    """
+    candidate = usage.get("model")
+    if isinstance(candidate, str) and model_exists(candidate):
+        return candidate
+    try:
+        parsed = parse_headless_model(model)
+    except ValueError:
+        return None
+    if parsed.agent_model and model_exists(parsed.agent_model):
+        return parsed.agent_model
+    return None
+
+
 def _query_result(
     *,
     content: str,
@@ -363,6 +435,18 @@ def _query_result(
         {"role": "user", "content": msg},
         {"role": "assistant", "content": content},
     ]
+
+    input_tokens = _usage_int(usage, "input_tokens", "prompt_tokens", "inputTokens")
+    output_tokens = _usage_int(
+        usage, "output_tokens", "completion_tokens", "outputTokens"
+    )
+    thinking_tokens = _usage_int(
+        usage,
+        "thinking_tokens",
+        "reasoning_tokens",
+        "reasoningOutputTokens",
+    )
+
     nested_cost = usage.get("cost") if isinstance(usage.get("cost"), dict) else {}
     input_cost = _usage_float(usage, "input_cost", "prompt_cost")
     if input_cost == 0.0:
@@ -374,6 +458,35 @@ def _query_result(
     if cost == 0.0:
         cost = input_cost + output_cost
 
+    # Headless/subscription agents report zeroed usage (no API metering), so
+    # budget tracking is blind. Fall back to a heuristic token estimate and,
+    # when the model is priced, a heuristic cost. Marked estimated in kwargs.
+    tokens_estimated = False
+    if input_tokens == 0:
+        prompt_text = "\n".join(
+            (system_msg or "", _msg_history_text(msg_history), msg or "")
+        )
+        input_tokens = estimate_tokens_blended(prompt_text)
+        tokens_estimated = True
+    if output_tokens == 0:
+        output_tokens = estimate_tokens_blended(content)
+        tokens_estimated = True
+
+    cost_estimated = False
+    if cost == 0.0:
+        pricing_model = _pricing_model_name(usage, model)
+        if pricing_model is not None:
+            input_cost, output_cost = calculate_cost(
+                pricing_model, input_tokens, output_tokens
+            )
+            cost = input_cost + output_cost
+            cost_estimated = True
+
+    if tokens_estimated:
+        kwargs["tokens_estimated"] = True
+    if cost_estimated:
+        kwargs["cost_estimated"] = True
+
     return QueryResult(
         content=content,
         msg=msg,
@@ -381,16 +494,9 @@ def _query_result(
         new_msg_history=new_msg_history,
         model_name=model,
         kwargs=kwargs,
-        input_tokens=_usage_int(usage, "input_tokens", "prompt_tokens", "inputTokens"),
-        output_tokens=_usage_int(
-            usage, "output_tokens", "completion_tokens", "outputTokens"
-        ),
-        thinking_tokens=_usage_int(
-            usage,
-            "thinking_tokens",
-            "reasoning_tokens",
-            "reasoningOutputTokens",
-        ),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        thinking_tokens=thinking_tokens,
         cost=cost,
         input_cost=input_cost,
         output_cost=output_cost,
@@ -414,6 +520,7 @@ def query_headless(
 
     headless_work_dir = kwargs.pop("headless_work_dir", None)
     parsed_model = parse_headless_model(model)
+    _raise_if_limit_paused(parsed_model)
     prompt_path = _write_prompt_file(
         work_dir=headless_work_dir,
         msg=msg,
@@ -438,8 +545,7 @@ def query_headless(
         ) from exc
 
     if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip()
-        raise RuntimeError(f"Headless query failed: {detail}")
+        _raise_for_failed_query(parsed_model, completed)
 
     content, usage = _parse_stdout(completed.stdout)
     result_kwargs = {
@@ -474,6 +580,7 @@ async def query_headless_async(
 
     headless_work_dir = kwargs.pop("headless_work_dir", None)
     parsed_model = parse_headless_model(model)
+    _raise_if_limit_paused(parsed_model)
     prompt_path = _write_prompt_file(
         work_dir=headless_work_dir,
         msg=msg,
@@ -501,8 +608,7 @@ async def query_headless_async(
         _THREAD_LOCK.release()
 
     if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip()
-        raise RuntimeError(f"Headless query failed: {detail}")
+        _raise_for_failed_query(parsed_model, completed)
 
     content, usage = _parse_stdout(completed.stdout)
     result_kwargs = {

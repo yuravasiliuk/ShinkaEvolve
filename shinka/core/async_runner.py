@@ -49,6 +49,7 @@ from shinka.core.summarizer import MetaSummarizer
 from shinka.core.async_summarizer import AsyncMetaSummarizer
 from shinka.core.async_novelty_judge import AsyncNoveltyJudge
 from shinka.core.novelty_judge import NoveltyJudge
+from shinka.llm import subscription_usage
 from shinka.core.config import EvolutionConfig, FOLDER_PREFIX
 from shinka.core.pipeline_timing import (
     summarize_timing_metadata,
@@ -560,6 +561,14 @@ class ShinkaEvolveRunner:
         self.max_stuck_detections = 3  # Allow 3 stuck detections before giving up
         self.stuck_detection_timeout = 60.0  # 60 seconds without progress = stuck
         self.cost_limit_reached = False  # Track if we've hit the cost limit
+
+        # Subscription (headless/claude) usage-limit gating
+        self.subscription_pause_until: Optional[float] = None
+        self.subscription_limit_stop = False
+        self._subscription_gating_enabled = (
+            evo_config.subscription_pause_threshold is not None
+            and self._uses_headless_claude_models()
+        )
 
         # Meta task logging state (to reduce verbosity)
         self._last_meta_log_state: dict | None = None
@@ -2407,6 +2416,14 @@ class ShinkaEvolveRunner:
                                 f"(avg proposal cost: ${self.avg_proposal_cost:.4f})"
                             )
 
+                # Subscription (headless/claude) gating: pause proposals while
+                # the 5h window is (about to be) exhausted, stop on weekly cap
+                if should_generate_proposals and getattr(
+                    self, "_subscription_gating_enabled", False
+                ):
+                    if await self._subscription_pause_active():
+                        should_generate_proposals = False
+
                 # Determine how many proposals to generate
                 # Keep the pipeline full: aim for (running_jobs + active_proposals) = max_evaluation_jobs
                 # This ensures proposals are ready when evaluation slots open up
@@ -2467,6 +2484,99 @@ class ShinkaEvolveRunner:
         # If the slot event was what completed, clear it
         if slot_task in done:
             self.slot_available.clear()
+
+    def _uses_headless_claude_models(self) -> bool:
+        model_lists = [
+            self.evo_config.llm_models,
+            self.evo_config.meta_llm_models,
+            self.evo_config.novelty_llm_models,
+            self.evo_config.prompt_llm_models,
+        ]
+        return any(
+            model.startswith("headless/claude")
+            for models in model_lists
+            if models
+            for model in models
+        )
+
+    def _subscription_threshold_pct(self) -> float:
+        threshold = self.evo_config.subscription_pause_threshold or 0.0
+        # Fractions (0.95) and percents (95) are both accepted.
+        return threshold * 100.0 if threshold <= 1.0 else threshold
+
+    async def _subscription_pause_active(self) -> bool:
+        """True while new proposals should not be dispatched.
+
+        A 5-hour window at/above the threshold (or a provider-detected limit
+        hit) pauses proposals until the window resets. A weekly window
+        at/above the threshold stops new proposals for the rest of the run,
+        since its reset can be days away; in-flight work still completes,
+        mirroring the cost-cap behavior.
+        """
+        now = time.time()
+        if self.subscription_limit_stop:
+            return True
+
+        if self.subscription_pause_until is not None:
+            if now < self.subscription_pause_until:
+                return True
+            self.subscription_pause_until = None
+            subscription_usage.clear_limit_hit()
+            logger.info("Subscription usage window reset; resuming proposals.")
+
+        threshold_pct = self._subscription_threshold_pct()
+        usage = await asyncio.to_thread(
+            subscription_usage.get_claude_usage,
+            self.evo_config.subscription_usage_poll_interval,
+        )
+
+        if usage is not None and usage.seven_day_pct >= threshold_pct:
+            self.subscription_limit_stop = True
+            logger.error(
+                f"Subscription WEEKLY window at {usage.seven_day_pct:.0f}% "
+                f">= {threshold_pct:.0f}% threshold (resets "
+                f"{self._format_epoch(usage.seven_day_resets_at)}). Stopping "
+                "new proposals; in-flight evaluations will finish."
+            )
+            return True
+
+        hit = subscription_usage.get_limit_hit()
+        pause_until: Optional[float] = None
+        if hit is not None:
+            # Reactive: the provider saw an actual limit error mid-flight.
+            pause_until = hit.resets_at
+            if pause_until is None and usage is not None:
+                pause_until = usage.five_hour_resets_at
+            if pause_until is None or pause_until <= now:
+                pause_until = now + 900.0  # no usable reset info: retry in 15 min
+        elif usage is not None and usage.five_hour_pct >= threshold_pct:
+            # Proactive: window is (nearly) full; wait for the reported reset.
+            pause_until = usage.five_hour_resets_at or now + 900.0
+
+        if pause_until is None:
+            return False
+
+        pause_until += 30.0  # small buffer past the reported reset
+        self.subscription_pause_until = pause_until
+        if hit is not None:
+            # Make concurrent in-flight retries fail fast without CLI spawns.
+            subscription_usage.set_limit_pause_until(pause_until)
+        five_hour_str = f"{usage.five_hour_pct:.0f}%" if usage else "unknown"
+        logger.warning(
+            f"Subscription usage gate: 5h window at {five_hour_str} "
+            f"(threshold {threshold_pct:.0f}%"
+            f"{', limit error observed' if hit is not None else ''}). "
+            f"Pausing new proposals for "
+            f"{max(0.0, pause_until - now) / 60:.1f} min "
+            f"(until {self._format_epoch(pause_until)})."
+        )
+        return True
+
+    @staticmethod
+    def _format_epoch(epoch: Optional[float]) -> str:
+        if epoch is None:
+            return "unknown"
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(epoch))
 
     async def _start_proposals(self, num_proposals: int):
         """Start the specified number of concurrent proposal generation tasks.
@@ -5241,6 +5351,20 @@ class ShinkaEvolveRunner:
 
         # Don't consider system stuck if we're waiting for cost-limited jobs
         if self.cost_limit_reached and running_eval_jobs > 0:
+            return False
+
+        # A subscription-limit pause is deliberate waiting, not a stall;
+        # a weekly-limit stop winds down like the cost cap does.
+        subscription_pause_until = getattr(self, "subscription_pause_until", None)
+        if (
+            subscription_pause_until is not None
+            and time.time() < subscription_pause_until
+        ):
+            return False
+        if (
+            getattr(self, "subscription_limit_stop", False)
+            and running_eval_jobs > 0
+        ):
             return False
 
         if self._has_persistence_work_in_progress():
