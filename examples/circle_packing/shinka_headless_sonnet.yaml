@@ -1,0 +1,49 @@
+# Small headless smoke config: Claude Sonnet 5 via subscription-backed CLI.
+# The headless CLI serializes calls behind a lock, so 1/1 concurrency is honest.
+max_evaluation_jobs: 1
+max_proposal_jobs: 1
+max_db_workers: 2
+
+db_config:
+  num_islands: 2
+  archive_size: 10
+  elite_selection_ratio: 0.3
+  num_archive_inspirations: 1
+  num_top_k_inspirations: 1
+  migration_interval: 10
+  migration_rate: 0.1
+  island_elitism: true
+  enforce_island_separation: true
+  parent_selection_strategy: weighted
+  parent_selection_lambda: 10
+
+evo_config:
+  # cross patches need extra context; full/diff is the recommended headless mix
+  patch_types:
+    - full
+    - diff
+  patch_type_probs:
+    - 0.5
+    - 0.5
+  num_generations: 4
+  # sonnet-5 costs are backfilled estimates on subscription runs; cap anyway
+  max_api_costs: 5.0
+  max_patch_resamples: 1
+  max_patch_attempts: 1
+  max_novelty_attempts: 1
+  job_type: local
+  language: python
+  # bare headless/claude would resolve to the wrapper default (claude-opus-4-6)
+  llm_models:
+    - "headless/claude@claude-sonnet-5"
+  # single model: no bandit needed
+  llm_dynamic_selection: null
+  llm_kwargs:
+    temperatures:
+      - 0.0
+    max_tokens: 16384
+  meta_rec_interval: null
+  # no embedding/novelty API calls: keep the run purely subscription-backed
+  embedding_model: null
+  init_program_path: initial.py
+  results_dir: results/sonnet5_smoke
