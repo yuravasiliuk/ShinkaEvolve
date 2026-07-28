@@ -1,0 +1,39 @@
+
+#   shinka_run --task-dir examples/tsp_problem --results_dir results/tsp_problem \
+#     --num_generations 30 --config-fname config.yaml
+
+# shinka_run requires --num_generations on the command line and not config gile
+# Anything set here can still be overridden per-run with --set evo.field=value
+# (the CLI --set flags always win over this file).
+
+# in .env -> OPENROUTER_API_KEY: "API_KEY"
+
+evo:
+  task_sys_msg: |
+    You are an expert Python programmer.
+    TODO: describe the actual problem run_experiment solves, its inputs and
+    outputs, what "better" means for combined_score, and any domain hints
+    or strategies worth exploring.
+  llm_models: ["headless/claude?effort=high"]
+  # llm_models: ["openrouter/anthropic/claude-sonnet-4.5"]
+  # We will probably use deepseek
+
+  embedding_model: null
+  # embedding_model: "openrouter/openai/text-embedding-3-small"
+
+  # diff  = SEARCH/REPLACE-style targeted edit to the parent program
+  # full  = rewrite the whole EVOLVE-BLOCK from scratch
+  # cross = combine two parent/inspiration programs
+  # Probabilities must sum to 1.0.
+  patch_types: ["diff", "full", "cross"]
+  patch_type_probs: [0.6, 0.3, 0.1]
+
+  # If program fails, how many times to retry
+  max_patch_resamples: 3
+  max_api_costs: 5.0
+
+db:
+  num_islands: 2
+
+  # How many of the best-ever programs are kept as "elite" long-term
+  archive_size: 40
