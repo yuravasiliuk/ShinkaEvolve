@@ -1,5 +1,5 @@
 
-#   shinka_run --task-dir examples/custom_problem --results_dir results/custom_problem \
+#   shinka_run --task-dir examples/tsp_problem --results_dir results/tsp_problem \
 #     --num_generations 30 --config-fname config.yaml
 
 # shinka_run requires --num_generations on the command line and not config gile
