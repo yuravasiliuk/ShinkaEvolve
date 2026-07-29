@@ -25,21 +25,21 @@ db_config = DatabaseConfig(
 
 evo_config = EvolutionConfig(
     patch_types=["full", "diff"],
-    patch_type_probs=[0.5, 0.5],
-    num_generations=10,
+    patch_type_probs=[0.1, 0.9],
+    num_generations=30,
     max_patch_resamples=1,
     max_patch_attempts=1,
     job_type="local",
     language="python",
     llm_models=[
         "headless/codex@gpt-5.5?effort=high",
-        "headless/claude",
+        
     ],
     llm_dynamic_selection="fixed",
     llm_kwargs={
-        "temperatures": [0.0],
+        "temperatures": [0.5],
         "max_tokens": 4096,
-        "reasoning_efforts": ["high"],
+        "reasoning_efforts": ["medium"],
     },
     embedding_model=None,
     init_program_path=str(TASK_DIR / "initial.py"),
@@ -54,7 +54,7 @@ def main() -> None:
         job_config=job_config,
         db_config=db_config,
         max_evaluation_jobs=2,
-        max_proposal_jobs=2,
+        max_proposal_jobs=4,
         max_db_workers=2,
         verbose=True,
     )

@@ -41,7 +41,7 @@ class EvolutionConfig:
     init_program_path: Optional[str] = "initial.py"
     results_dir: Optional[str] = None
     max_novelty_attempts: int = 3
-    code_embed_sim_threshold: float = 0.99
+    code_embed_sim_threshold: float = 0.95
     novelty_llm_models: Optional[List[str]] = None
     novelty_llm_kwargs: dict = field(default_factory=lambda: {})
     use_text_feedback: bool = False
