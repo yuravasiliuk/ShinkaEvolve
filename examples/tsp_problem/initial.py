@@ -1,16 +1,23 @@
+import time
+
 # EVOLVE-BLOCK-START
-def tsp_problem(dist_matrix: list[list[float]]) -> tuple[list[int], float, float]:
+def solve_tsp(dist_matrix: list[list[float]]) -> tuple[list[int], float]:
     n: int = len(dist_matrix)
 
     tour: list[int] = list(range(n))
-    
+
     total_distance: float = 0.0
     for i in range(n):
         u: int = tour[i]
         v: int = tour[(i + 1) % n]
         total_distance += dist_matrix[u][v]
 
-    elapsed = 0
-        
-    return tour, total_distance, elapsed
+    return tour, total_distance
 # EVOLVE-BLOCK-END
+
+def tsp_problem(dist_matrix: list[list[float]]) -> tuple[list[int], float, float]:
+    start = time.perf_counter()
+    tour, total_distance = solve_tsp(dist_matrix)
+    elapsed = time.perf_counter() - start
+
+    return tour, total_distance, elapsed
