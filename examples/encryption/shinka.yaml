@@ -1,0 +1,52 @@
+max_evaluation_jobs: 2
+max_proposal_jobs: 1
+max_db_workers: 2
+verbose: true
+
+job_config:
+  time: "00:05:00"
+  extra_cmd_args:
+    text: "Shinka evolves encryption."
+    importance: 0.7
+    key: "local-demo-key-#123%45#67%89!!"
+
+db_config:
+  num_islands: 2
+  archive_size: 12
+  num_archive_inspirations: 2
+  num_top_k_inspirations: 2
+
+evo_config:
+  task_sys_msg: |
+    Design a novel reversible byte encryption transform and maximize 
+    combined_score. Implement encrypt(data, importance, key) anddecrypt(data, importance, key)
+    inside the evolve block.
+
+    Use original arithmetic, bitwise operations, rotations, permutations and generated lookup tables. 
+    Do not import or call cryptographic, hashing, compression, encoding, random, or third-party libraries.
+    Decryptuon must exacty recover every byte and importance must be validated in [0,1].
+    Prefer diffusion accros the whole message while keeping runtime and output size low.
+    Prefer nonlinear, non-deterministic constructions with nonce support, at least 8 rounds 
+    using both forward and backward passes with evolving internal state, 
+    while avoiding linear-only or simple XOR-based transformations.
+
+  patch_types:
+    - diff
+    - full 
+  patch_type_probs:
+    - 0.7
+    - 0.3
+  max_patch_resamples: 2
+  max_patch_attempts: 2
+  max_novelty_attempts: 1
+  llm_models:
+    - "headless/codex@gpt-5.5?effort=high"
+  llm_dynamic_selection: fixed
+  llm_kwargs:
+    temperatures:
+      - 0.2
+      - 0.7
+    max_tokens: 8192
+    reasoning_efforts:
+      - high
+  embedding_model: null
