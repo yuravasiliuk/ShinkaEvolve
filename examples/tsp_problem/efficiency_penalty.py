@@ -1,6 +1,7 @@
 import time
 
-from examples.tsp_problem.cities import CITIES
+from cities import CITIES
+
 
 # A base, greedy and naive tsp problem function. Its time to perform algorithm serves as a basline time for LLM solution
 def naive_tsp(dist_matrix: list[list[float]]) -> float:
@@ -28,8 +29,11 @@ def naive_tsp(dist_matrix: list[list[float]]) -> float:
     elapsed = time.perf_counter() - start
     return elapsed
 
+
 # Function that returns penalty for a particular result from 0 to 1
-def calculate_efficiency_penalty(result: tuple[list[int], float, float], run_idx: int) -> float:
+def calculate_efficiency_penalty(
+    result: tuple[list[int], float, float], run_idx: int
+) -> float:
     dist_matrix = CITIES[run_idx]
 
     llm_elapsed = result[2]
@@ -42,8 +46,12 @@ def calculate_efficiency_penalty(result: tuple[list[int], float, float], run_idx
 
     if ratio <= 1 / 3:  # 3x faster -> no penalty
         return 0.0
-    if ratio <= 1.0:  # from 3x faster to the same speed as greedy -> penalty from 0.0 to 0.8
+    if (
+        ratio <= 1.0
+    ):  # from 3x faster to the same speed as greedy -> penalty from 0.0 to 0.8
         return 0.8 * (ratio - 1 / 3) / (1 - 1 / 3)
-    if ratio <= 1.5:  # from the same speed as greedy to 50% slower -> penalty from 0.8 to 1
+    if (
+        ratio <= 1.5
+    ):  # from the same speed as greedy to 50% slower -> penalty from 0.8 to 1
         return 0.8 + 0.2 * (ratio - 1.0)
-    return 1.0 # more than 50% slower than greedy
+    return 1.0  # more than 50% slower than greedy

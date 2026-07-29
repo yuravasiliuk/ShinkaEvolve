@@ -22,4 +22,3 @@ CITIES = [
     CITY_0,
     CITY_1,
 ]
-
