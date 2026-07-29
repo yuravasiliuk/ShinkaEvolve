@@ -1,11 +1,8 @@
 import argparse
 from shinka.core import run_shinka_eval
 
-
-
 from examples.tsp_problem.cities import CITIES, OPTIMAL_DISTANCES
 from examples.tsp_problem.metrics import calculate_relative_error_score
-
 
 # here we provide the arguments to a generated program in each run for specific generation code, more explanation in def main()
 def get_experiment_kwargs(run_idx: int) -> dict[str, object]:

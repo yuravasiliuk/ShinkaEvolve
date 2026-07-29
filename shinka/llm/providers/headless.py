@@ -31,6 +31,7 @@ from .result import QueryResult
 DEFAULT_HEADLESS_COMMAND = "npx -y @roberttlange/headless"
 HEADLESS_COMMAND_ENV = "SHINKA_HEADLESS_COMMAND"
 HEADLESS_TIMEOUT_ENV = "SHINKA_HEADLESS_TIMEOUT"
+CODEX_COMMAND_ENV = "SHINKA_CODEX_COMMAND"
 
 _VALID_EFFORTS = {"low", "medium", "high", "xhigh"}
 _THREAD_LOCK = threading.Lock()
@@ -191,12 +192,20 @@ def _uses_shell_invocation(model: HeadlessModel) -> bool:
 
 
 def _subprocess_env(model: HeadlessModel) -> dict[str, str] | None:
-    if model.agent != "claude":
-        return None
     env = os.environ.copy()
-    env.pop("ANTHROPIC_API_KEY", None)
-    env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
-    return env
+    if model.agent == "claude":
+        env.pop("ANTHROPIC_API_KEY", None)
+        env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+        return env
+
+    if model.agent == "codex":
+        raw_command = env.get(CODEX_COMMAND_ENV)
+        if raw_command:
+            executable = Path(shlex.split(raw_command)[0]).expanduser().resolve()
+            env["PATH"] = f"{executable.parent}{os.pathsep}{env.get('PATH', '')}"
+            return env
+
+    return None
 
 
 def _is_transient_claude_credit_error(
