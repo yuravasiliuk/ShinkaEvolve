@@ -1,10 +1,126 @@
 import argparse
+import time
 
-from cities import CITIES, OPTIMAL_DISTANCES
-from complexity_penalty import calculate_complexity_penalty
-from efficiency_penalty import calculate_efficiency_penalty
-from relative_error_score import calculate_relative_error_score
 from shinka.core import run_shinka_eval
+
+# shinka_run only copies evaluate.py into results_dir (not sibling files), so
+# every helper this script needs must live in this one file.
+
+OPTIMAL_DISTANCES = [
+    80.0,
+    26.0,
+]
+
+CITY_0 = [
+    [0, 10, 15, 20],
+    [10, 0, 35, 25],
+    [15, 35, 0, 30],
+    [20, 25, 30, 0],
+]
+
+CITY_1 = [
+    [0, 2, 9, 10, 7],
+    [2, 0, 6, 4, 3],
+    [9, 6, 0, 8, 5],
+    [10, 4, 8, 0, 6],
+    [7, 3, 5, 6, 0],
+]
+
+CITIES = [
+    CITY_0,
+    CITY_1,
+]
+
+
+def calculate_relative_error_score(
+    result: tuple[list[int], float, float],
+    optimal_distance: float,
+) -> float:
+
+    total_distance = result[1]
+
+    relative_error = abs(total_distance - optimal_distance) / optimal_distance
+
+    score = max(0.0, 1.0 - relative_error)
+
+    return score
+
+
+def calculate_complexity_penalty(
+    result: tuple[list[int], float, float],
+) -> float:
+    tour, _, elapsed_time = result
+    # tour is a closed loop (tour[0] == tour[-1]), so the number of distinct
+    # cities is one less than the number of elements in it.
+    city_places_count = len(tour) - 1
+
+    if city_places_count <= 0 or elapsed_time <= 0:
+        return 0.0
+
+    # Base expected processing time coefficient for O(N) (10 microseconds/city)
+    base_time_per_city = 1e-5
+
+    # Ratio comparing actual execution time against baseline O(N) expectation
+    normalized_time_ratio = elapsed_time / (city_places_count * base_time_per_city)
+    raw_value = max(0.0, normalized_time_ratio - 1.0)
+
+    penalty = 1.0 - (1.0 / (1.0 + raw_value))
+
+    return round(penalty, 4)
+
+
+# A base, greedy and naive tsp problem function. Its time to perform algorithm serves as a basline time for LLM solution
+def naive_tsp(dist_matrix: list[list[float]]) -> float:
+    n = len(dist_matrix)
+    start = time.perf_counter()
+
+    visited = [False] * n
+    visited[0] = True
+    current = 0
+    total_distance = 0.0
+
+    for _ in range(n - 1):
+        nearest_city = -1
+        nearest_distance = float("inf")
+        for city in range(n):
+            if not visited[city] and dist_matrix[current][city] < nearest_distance:
+                nearest_city = city
+                nearest_distance = dist_matrix[current][city]
+        visited[nearest_city] = True
+        total_distance += nearest_distance
+        current = nearest_city
+
+    total_distance += dist_matrix[current][0]
+
+    elapsed = time.perf_counter() - start
+    return elapsed
+
+
+# Function that returns penalty for a particular result from 0 to 1
+def calculate_efficiency_penalty(
+    result: tuple[list[int], float, float], run_idx: int
+) -> float:
+    dist_matrix = CITIES[run_idx]
+
+    llm_elapsed = result[2]
+    greedy_elapsed = naive_tsp(dist_matrix)
+
+    if greedy_elapsed <= 0:
+        return 0.0
+
+    ratio = llm_elapsed / greedy_elapsed  # comparision to greedy algorithm
+
+    if ratio <= 1 / 3:  # 3x faster -> no penalty
+        return 0.0
+    if (
+        ratio <= 1.0
+    ):  # from 3x faster to the same speed as greedy -> penalty from 0.0 to 0.8
+        return 0.8 * (ratio - 1 / 3) / (1 - 1 / 3)
+    if (
+        ratio <= 1.5
+    ):  # from the same speed as greedy to 50% slower -> penalty from 0.8 to 1
+        return 0.8 + 0.2 * (ratio - 1.0)
+    return 1.0  # more than 50% slower than greedy
 
 
 # here we provide the arguments to a generated program in each run for specific generation code, more explanation in def main()

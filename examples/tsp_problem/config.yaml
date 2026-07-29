@@ -1,6 +1,7 @@
 
 #   shinka_run --task-dir examples/tsp_problem --results_dir results/tsp_problem \
-#     --num_generations 30 --config-fname config.yaml
+#     --num_generations 5 --config-fname config.yaml \
+#     --max-proposal-jobs 1 --max-evaluation-jobs 1
 
 # shinka_run requires --num_generations on the command line and not config gile
 # Anything set here can still be overridden per-run with --set evo.field=value
@@ -58,7 +59,7 @@ evo:
     Held-Karp) get the shortest tour but are too slow and will be penalized
     heavily — favor good heuristics (nearest neighbor, greedy edge, 2-opt /
     or-opt local search, etc.) over exhaustive search.
-  llm_models: ["headless/claude?effort=high"]
+  llm_models: ["headless/claude?effort=low"]
   # llm_models: ["openrouter/anthropic/claude-sonnet-4.5"]
   # We will probably use deepseek
 
@@ -73,7 +74,7 @@ evo:
   patch_type_probs: [0.6, 0.3, 0.1]
 
   # If program fails, how many times to retry
-  max_patch_resamples: 3
+  max_patch_resamples: 1
   max_api_costs: 5.0
 
 db:
