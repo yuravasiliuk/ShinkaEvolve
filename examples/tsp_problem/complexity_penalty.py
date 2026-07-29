@@ -1,18 +1,16 @@
 """Complexity penalty module for Traveling Salesperson Problem (TSP)."""
 
-from typing import List, Tuple
-
 
 def calc_complexity_penalty(
-    result: Tuple[List[int], float, float],
+    result: tuple[list[int], float, float],
 ) -> float:
     """Calculate time complexity penalty based on city count and execution time.
 
     Args:
-        result (Tuple[List[int], float, float]): A tuple containing:
-            - tour (List[int]): Sequence of visited city IDs.
-            - total_distance (float): Total route distance.
-            - elapsed_time (float): Execution time in seconds.
+        result: A tuple containing:
+            - tour: Sequence of visited city IDs.
+            - total_distance: Total route distance.
+            - elapsed_time: Execution time in seconds.
 
     Returns:
         float: Penalty score between 0.0 (Fast/Optimal) and 1.0 (Slow/Poor).
