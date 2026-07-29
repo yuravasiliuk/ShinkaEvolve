@@ -1,6 +1,6 @@
 import time
 
-from cities import CITIES
+from examples.tsp_problem.cities import CITIES
 
 # A base, greedy and naive tsp problem function. Its time to perform algorithm serves as a basline time for LLM solution
 def naive_tsp(dist_matrix: list[list[float]]) -> float:

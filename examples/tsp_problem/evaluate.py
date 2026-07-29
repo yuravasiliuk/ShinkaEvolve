@@ -2,12 +2,11 @@ import argparse
 from shinka.core import run_shinka_eval
 
 from examples.tsp_problem.cities import CITIES, OPTIMAL_DISTANCES
-from examples.tsp_problem.metrics import calculate_relative_error_score
+from examples.tsp_problem.relative_error_score import calculate_relative_error_score
 
 # here we provide the arguments to a generated program in each run for specific generation code, more explanation in def main()
 def get_experiment_kwargs(run_idx: int) -> dict[str, object]:
     return {"dist_matrix": CITIES[run_idx]}
-
 
 # Here we validate our program. In our case we check if the algorithm visits each city exactly once and every city was visited
 # It's True and None when everything is ok and False, "Explaining why was it invalid" when it's not
@@ -16,9 +15,7 @@ def validate_fn(result: float | int) -> tuple[bool, str | None]:
         return False, f"Expected a numeric result, got {type(result)}"
     return True, None
 
-
 # This is the most important function. Here we write the test to generate the score for current program.
-
 def aggregate_metrics_fn(
     results: list[tuple[list[int], float, float]]
 ) -> dict[str, object]:

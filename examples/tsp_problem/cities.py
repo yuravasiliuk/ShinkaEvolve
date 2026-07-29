@@ -1,18 +1,16 @@
-"""
-City distance matrices for the Travelling Salesman Problem example.
+OPTIMAL_DISTANCES = [
+    80.0,
+    26.0,
+]
 
-Each matrix is a square matrix where matrix[i][j]
-represents the distance from city i to city j.
-"""
-
-CITY_4 = [
+CITY_0 = [
     [0, 10, 15, 20],
     [10, 0, 35, 25],
     [15, 35, 0, 30],
     [20, 25, 30, 0],
 ]
 
-CITY_5 = [
+CITY_1 = [
     [0, 2, 9, 10, 7],
     [2, 0, 6, 4, 3],
     [9, 6, 0, 8, 5],
@@ -21,10 +19,7 @@ CITY_5 = [
 ]
 
 CITIES = [
-    CITY_4,
-    CITY_5,
+    CITY_0,
+    CITY_1,
 ]
-OPTIMAL_DISTANCES = [
-    80.0,   # Optimal distance for CITY_4
-    26.0,   # Optimal distance for CITY_5
-]
+
