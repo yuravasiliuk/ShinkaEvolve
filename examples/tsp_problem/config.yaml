@@ -1,6 +1,7 @@
 
 #   shinka_run --task-dir examples/tsp_problem --results_dir results/tsp_problem \
-#     --num_generations 30 --config-fname config.yaml
+#     --num_generations 5 --config-fname config.yaml \
+#     --max-proposal-jobs 1 --max-evaluation-jobs 1
 
 # shinka_run requires --num_generations on the command line and not config gile
 # Anything set here can still be overridden per-run with --set evo.field=value
@@ -10,11 +11,55 @@
 
 evo:
   task_sys_msg: |
-    You are an expert Python programmer.
-    TODO: describe the actual problem run_experiment solves, its inputs and
-    outputs, what "better" means for combined_score, and any domain hints
-    or strategies worth exploring.
-  llm_models: ["headless/claude?effort=high"]
+    You are an expert Python programmer improving a heuristic solver for the
+    Traveling Salesman Problem (TSP).
+
+    You may only modify the code inside `solve_tsp`, between the
+    `# EVOLVE-BLOCK-START` and `# EVOLVE-BLOCK-END` markers. Code outside
+    that block is fixed and must not be changed.
+
+    Function signature:
+        def solve_tsp(dist_matrix: list[list[float]]) -> tuple[list[int], float]
+
+    Input:
+    - `dist_matrix`: an n x n distance matrix (list of lists of floats).
+      `dist_matrix[i][j]` is the distance between city `i` and city `j`.
+      Cities are identified by their index, from 0 to n-1.
+
+    Output, a tuple `(tour, total_distance)`:
+    - `tour`: a list of city indices giving the order in which cities are
+      visited, describing a CLOSED tour:
+        * it must start and end with the SAME city, i.e. `tour[0] == tour[-1]`
+          (the salesman returns to the city they started from);
+        * every city from 0 to n-1 must appear exactly once elsewhere in the
+          list — none skipped, none visited twice. So for n cities,
+          `len(tour) == n + 1`.
+    - `total_distance`: the float length of that closed tour — the sum of
+      `dist_matrix[tour[i]][tour[i+1]]` over consecutive cities in `tour`,
+      including the final leg back to the starting city.
+
+    A tour that violates this format (wrong start/end city, or a city
+    skipped/duplicated) is rejected as invalid and scores 0 for that run,
+    no matter how short `total_distance` claims to be — getting the tour
+    structure right comes first.
+
+    How `combined_score` (maximized) is computed per test city set:
+    - `relative_error_score`: how close `total_distance` is to the known
+      optimal tour length (1.0 = optimal, lower as you get farther from it).
+    - `efficiency_penalty`: penalizes `solve_tsp` being much slower than a
+      simple nearest-neighbor greedy baseline on the same input.
+    - `complexity_penalty`: penalizes runtime that scales worse than
+      roughly O(n) in the number of cities.
+    - combined_score = relative_error_score * (1 - (0.3 * efficiency_penalty
+      + 0.7 * complexity_penalty))
+
+    In short: produce tours as short as possible (close to optimal) while
+    keeping the algorithm fast, both in absolute terms and in how it scales
+    with the number of cities. Exact optimal-TSP algorithms (brute force,
+    Held-Karp) get the shortest tour but are too slow and will be penalized
+    heavily — favor good heuristics (nearest neighbor, greedy edge, 2-opt /
+    or-opt local search, etc.) over exhaustive search.
+  llm_models: ["headless/claude?effort=low"]
   # llm_models: ["openrouter/anthropic/claude-sonnet-4.5"]
   # We will probably use deepseek
 
@@ -29,7 +74,7 @@ evo:
   patch_type_probs: [0.6, 0.3, 0.1]
 
   # If program fails, how many times to retry
-  max_patch_resamples: 3
+  max_patch_resamples: 1
   max_api_costs: 5.0
 
 db:
