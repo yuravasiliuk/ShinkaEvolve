@@ -64,12 +64,12 @@ evo:
     In short: the tour has to be exactly optimal — once it is, the score is
     about how fast the algorithm runs, both in absolute terms and in how it
     scales with the number of cities.
-  llm_models: ["headless/claude?effort=low"]
-  # llm_models: ["openrouter/anthropic/claude-sonnet-4.5"]
-  # We will probably use deepseek
+  llm_models: ["openrouter/deepseek/deepseek-chat"]
+  # llm_models: ["openrouter/deepseek/deepseek-r1"]  # 404: no OpenRouter callers via /v1/responses for this account
+  # llm_models: ["headless/claude?effort=low"]
 
-  embedding_model: null
-  # embedding_model: "openrouter/openai/text-embedding-3-small"
+  embedding_model: "openrouter/openai/text-embedding-3-small"
+  # embedding_model: null,
 
   # diff  = SEARCH/REPLACE-style targeted edit to the parent program
   # full  = rewrite the whole EVOLVE-BLOCK from scratch
@@ -79,8 +79,9 @@ evo:
   patch_type_probs: [0.6, 0.3, 0.1]
 
   # If program fails, how many times to retry
-  max_patch_resamples: 1
-  max_api_costs: 5.0
+  max_patch_resamples: 3
+  max_api_costs: 10
+  code_embed_sim_threshold: 0.95
 
 db:
   num_islands: 2
