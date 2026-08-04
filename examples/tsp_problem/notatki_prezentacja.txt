@@ -1,0 +1,31 @@
+TSP PROBLEM - NOTATKI DO PREZENTACJI (5 czesci, ~7 min)
+
+1. PUNKT STARTOWY
+- projekt: TSP (Traveling Salesman Problem) jako przyklad pod Shinka Evolve
+- solve_tsp w initial.py, LLM moze zmieniac tylko blok EVOLVE-BLOCK
+- ewaluacja: dajemy macierz odleglosci miast, LLM zwraca trase + jej dlugosc
+- score mial liczyc od razu 3 rzeczy: jak blisko trasa jest optimum + kara za czas + kara za zlozonosc
+
+2. PIERWSZE PODEJSCIE - PROBLEMY TECHNICZNE
+- na start logika evaluate byla rozbita na kilka plikow (pomocnicze funkcje osobno od evaluate.py)
+- okazalo sie, ze shinka_run kopiuje do results_dir TYLKO evaluate.py, nic wiecej - reszta plikow byla niewidoczna, run sie wywalal
+- musielismy sciagnac cala logike do jednego pliku evaluate.py
+- miasta na start byly hardcodowane (2 male przyklady, 4 i 5 miast), optimum policzone recznie
+
+3. PROBLEM Z SCORINGIEM
+- score liczyl relative_error_score (jak blisko optimum) razem z karami za czas/zlozonosc w jednym wzorze
+- czyli LLM mogl dostac wysoki wynik nawet nie znajdujac optymalnej trasy, jak tylko byl szybki
+- to rozmywalo sygnal - trudno bylo ocenic czy zmiana faktycznie poprawila algorytm czy tylko przyspieszyla zle rozwiazanie
+
+4. TEST WYDAJNOSCIOWY - HIGH VS LOW LLM
+- pierwszy test na "high" effort LLM - nawet po 15 min pierwsza generacja sie nie skonczyla, przerwane
+- przelaczenie na "low" effort, 7 generacji
+- wynik: wszystkie nowe warianty gorsze od generacji 0 (czyli od naiwnego initial.py)
+- wniosek: low LLM przy takim scoringu nie byl w stanie sensownie poprawiac trasy, tylko ja psul
+
+5. ZMIANY
+- sprawdzanie czy trasa jest optymalna przeniesione z scoringu do validate_fn - trasa nieoptymalna = invalid, tak samo jak zla struktura trasy (brak miasta / powtorzone miasto)
+- score liczy sie juz TYLKO z efficiency_penalty + complexity_penalty, zero relative_error
+- miasta generowane zamiast hardcodowanych: 5, 50, 500, 1000, 2000 punktow
+- trik: miasta ustawione na okregu -> zawsze w polozeniu wypuklym -> optymalna trasa to kolejnosc katowa punktow, wiec znamy optimum z gory, bez liczenia brute force
+- dodany limit czasu na jedna ewaluacje (job.time), zeby zly (np. wykladniczy) algorytm na 2000 miastach nie zawiesil evaluate w nieskonczonosc
