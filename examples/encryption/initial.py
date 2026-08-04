@@ -13,19 +13,51 @@ fixed repeating patterns and independent per-byte encryption schemes. Security a
 """
 
 
+from __future__ import annotations
+import os
+
+
 # EVOLVE-BLOCK-START
+
+NONCE_SIZE = 8
+
+
+def _xor_transform(data: bytes, key_stream: bytes) -> bytes:
+    return bytes(
+        value ^ key_stream[index % len(key_stream)]
+        for index, value in enumerate(data)
+    )
+
+
+def _encrypt_with_nonce(
+    data: bytes,
+    importance: float,
+    key: bytes,
+    nonce: bytes,
+) -> bytes:
+    if not key:
+        raise ValueError("key must not be empty")
+    key_stream = key + nonce
+    ciphertext = _xor_transform(data, key_stream)
+
+    return nonce + ciphertext
+
 
 def encrypt(data: bytes, importance: float, key: bytes) -> bytes:
     """
-    Encrypt data using key and with protection strength adapted to the importance level.
+    Encrypt data using key and with protection strength adapted
+    to the importance level.
     """
 
     if not 0.0 <= importance <= 1.0:
         raise ValueError("importance must be in the range [0.0, 1.0]")
+
     if not key:
-        raise ValueError("key must be not be empty")
+        raise ValueError("key must not be empty")
     
-    return data
+    nonce = os.urandom(NONCE_SIZE)
+
+    return _encrypt_with_nonce(data, importance, key, nonce)
 
 
 def decrypt(data: bytes, importance: float, key: bytes) -> bytes:
@@ -35,9 +67,19 @@ def decrypt(data: bytes, importance: float, key: bytes) -> bytes:
 
     if not 0.0 <= importance <= 1.0:
         raise ValueError("importance must be in the range [0.0, 1.0]")
+
     if not key:
-        raise ValueError("key must be not be empty")
-    
-    return data
+        raise ValueError("key must not be empty")
+
+    if len(data) < NONCE_SIZE:
+        raise ValueError("invalid ciphertext")
+
+    nonce = data[:NONCE_SIZE]
+    ciphertext = data[NONCE_SIZE:]
+
+    key_stream = key + nonce
+
+    return _xor_transform(ciphertext, key_stream)
+
 
 # EVOLVE-BLOCK-END

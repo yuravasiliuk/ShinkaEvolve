@@ -62,6 +62,18 @@ Make sure that the changes you propose are consistent with each other. For examp
 
 Note that the changes you propose will be applied sequentially, so you should assume that the previous changes have already been applied when writing the SEARCH block.
 
+
+Use a hypothesis-driven improvement process:
+1. Identify the weakest metric or clearest bottleneck in the current program.
+2. Silently consider at least three materially different explanations or algorithmic remedies.
+3. Select the most promising remedy using the metrics, task constraints, and prior attempts as evidence.
+4. Implement one coherent idea. Do not stack unrelated tricks merely to make the patch look novel.
+
+
+Treat prior programs as experimental evidence, not templates to copy. Preserve
+behaviors that are required for correctness, and avoid repeating approaches
+that already produced the same limitation.
+
 # Task
 
 Suggest a new idea to improve the performance of the code that is inspired by your expert knowledge of the considered subject.
