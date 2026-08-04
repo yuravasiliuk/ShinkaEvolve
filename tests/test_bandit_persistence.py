@@ -2,13 +2,15 @@
 Test script to verify bandit state persistence works correctly.
 """
 
-from io import StringIO
-import numpy as np
-from pathlib import Path
 import pickle
 import tempfile
+from io import StringIO
+from pathlib import Path
+
+import numpy as np
 from rich.console import Console
-from shinka.llm import AsymmetricUCB, ThompsonSampler, FixedSampler
+
+from shinka.llm import AsymmetricUCB, FixedSampler, ThompsonSampler
 
 
 def _exercise_sampler_after_resize(bandit):

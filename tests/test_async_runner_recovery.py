@@ -736,7 +736,6 @@ def test_start_proposals_does_not_assign_generation_past_target():
 
         async def _fake_generate(_generation, _task_id):
             await asyncio.sleep(0)
-            return None
 
         runner._generate_proposal_async = _fake_generate
 

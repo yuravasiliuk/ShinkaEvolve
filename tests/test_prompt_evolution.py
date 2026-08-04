@@ -8,18 +8,19 @@ Tests cover:
 4. Integration with Program tracking
 """
 
-import pytest
 import tempfile
 from pathlib import Path
 
+import pytest
+
+from shinka.core.prompt_evolver import SystemPromptSampler
+from shinka.database import Program
 from shinka.database.prompt_dbase import (
-    SystemPromptDatabase,
-    SystemPromptConfig,
     SystemPrompt,
+    SystemPromptConfig,
+    SystemPromptDatabase,
     create_system_prompt,
 )
-from shinka.database import Program
-from shinka.core.prompt_evolver import SystemPromptSampler
 
 
 class TestSystemPromptDataclass:
@@ -371,7 +372,7 @@ class TestSystemPromptSampler:
 
     def test_sample(self, sampler_with_prompts):
         """Test sampling prompts."""
-        sampler, db = sampler_with_prompts
+        sampler, _db = sampler_with_prompts
 
         # Sample should return a prompt
         prompt = sampler.sample()
@@ -380,14 +381,14 @@ class TestSystemPromptSampler:
 
     def test_get_best_prompt(self, sampler_with_prompts):
         """Test getting best prompt through sampler."""
-        sampler, db = sampler_with_prompts
+        sampler, _db = sampler_with_prompts
 
         best = sampler.get_best_prompt()
         assert best is not None
 
     def test_get_archive(self, sampler_with_prompts):
         """Test getting archive through sampler."""
-        sampler, db = sampler_with_prompts
+        sampler, _db = sampler_with_prompts
 
         archive = sampler.get_archive()
         assert len(archive) == 5

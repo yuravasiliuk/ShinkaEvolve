@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import shlex
 import stat
 import sys
-import asyncio
 from pathlib import Path
 
 import pytest
@@ -24,37 +24,7 @@ from shinka.model_availability import validate_model_env_access
 def _make_fake_headless(tmp_path: Path) -> Path:
     script = tmp_path / "fake_headless.py"
     script.write_text(
-        "\n".join(
-            [
-                "from __future__ import annotations",
-                "import json",
-                "import sys",
-                "from pathlib import Path",
-                "",
-                "if '--check' in sys.argv:",
-                "    raise SystemExit(0)",
-                "",
-                "prompt_path = Path(sys.argv[sys.argv.index('--prompt-file') + 1])",
-                "work_dir = Path(sys.argv[sys.argv.index('--work-dir') + 1])",
-                "assert prompt_path.exists(), prompt_path",
-                "assert work_dir.exists(), work_dir",
-                "print('<NAME>')",
-                "print('raise_score')",
-                "print('</NAME>')",
-                "print('<DESCRIPTION>')",
-                "print('Deterministic fake headless mutation.')",
-                "print('</DESCRIPTION>')",
-                "print('<CODE>')",
-                "print('```python')",
-                "print('# EVOLVE-BLOCK-START')",
-                "print('def score():')",
-                "print('    return 1.0')",
-                "print('# EVOLVE-BLOCK-END')",
-                "print('```')",
-                "print('</CODE>')",
-                "print(json.dumps({'usage': {'input_tokens': 11, 'output_tokens': 13, 'thinking_tokens': 0, 'cost': 0.0}}))",
-            ]
-        ),
+        "from __future__ import annotations\nimport json\nimport sys\nfrom pathlib import Path\n\nif '--check' in sys.argv:\n    raise SystemExit(0)\n\nprompt_path = Path(sys.argv[sys.argv.index('--prompt-file') + 1])\nwork_dir = Path(sys.argv[sys.argv.index('--work-dir') + 1])\nassert prompt_path.exists(), prompt_path\nassert work_dir.exists(), work_dir\nprint('<NAME>')\nprint('raise_score')\nprint('</NAME>')\nprint('<DESCRIPTION>')\nprint('Deterministic fake headless mutation.')\nprint('</DESCRIPTION>')\nprint('<CODE>')\nprint('```python')\nprint('# EVOLVE-BLOCK-START')\nprint('def score():')\nprint('    return 1.0')\nprint('# EVOLVE-BLOCK-END')\nprint('```')\nprint('</CODE>')\nprint(json.dumps({'usage': {'input_tokens': 11, 'output_tokens': 13, 'thinking_tokens': 0, 'cost': 0.0}}))",
         encoding="utf-8",
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
@@ -69,48 +39,11 @@ def _make_task_dir(tmp_path: Path) -> Path:
     task_dir = tmp_path / "headless_task"
     task_dir.mkdir()
     (task_dir / "initial.py").write_text(
-        "\n".join(
-            [
-                "# EVOLVE-BLOCK-START",
-                "def score():",
-                "    return 0.0",
-                "# EVOLVE-BLOCK-END",
-                "",
-            ]
-        ),
+        "# EVOLVE-BLOCK-START\ndef score():\n    return 0.0\n# EVOLVE-BLOCK-END\n",
         encoding="utf-8",
     )
     (task_dir / "evaluate.py").write_text(
-        "\n".join(
-            [
-                "from __future__ import annotations",
-                "",
-                "import argparse",
-                "import importlib.util",
-                "import json",
-                "from pathlib import Path",
-                "",
-                "def _load(path):",
-                "    spec = importlib.util.spec_from_file_location('program', path)",
-                "    module = importlib.util.module_from_spec(spec)",
-                "    spec.loader.exec_module(module)",
-                "    return module",
-                "",
-                "def main(program_path: str, results_dir: str):",
-                "    score = float(_load(program_path).score())",
-                "    Path(results_dir).mkdir(parents=True, exist_ok=True)",
-                "    Path(results_dir, 'metrics.json').write_text(json.dumps({'combined_score': score, 'public': {'score': score}, 'private': {}}))",
-                "    Path(results_dir, 'correct.json').write_text(json.dumps({'correct': True, 'error': ''}))",
-                "",
-                "if __name__ == '__main__':",
-                "    parser = argparse.ArgumentParser()",
-                "    parser.add_argument('--program_path', required=True)",
-                "    parser.add_argument('--results_dir', required=True)",
-                "    args = parser.parse_args()",
-                "    main(args.program_path, args.results_dir)",
-                "",
-            ]
-        ),
+        "from __future__ import annotations\n\nimport argparse\nimport importlib.util\nimport json\nfrom pathlib import Path\n\ndef _load(path):\n    spec = importlib.util.spec_from_file_location('program', path)\n    module = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(module)\n    return module\n\ndef main(program_path: str, results_dir: str):\n    score = float(_load(program_path).score())\n    Path(results_dir).mkdir(parents=True, exist_ok=True)\n    Path(results_dir, 'metrics.json').write_text(json.dumps({'combined_score': score, 'public': {'score': score}, 'private': {}}))\n    Path(results_dir, 'correct.json').write_text(json.dumps({'correct': True, 'error': ''}))\n\nif __name__ == '__main__':\n    parser = argparse.ArgumentParser()\n    parser.add_argument('--program_path', required=True)\n    parser.add_argument('--results_dir', required=True)\n    args = parser.parse_args()\n    main(args.program_path, args.results_dir)\n",
         encoding="utf-8",
     )
     return task_dir
@@ -203,18 +136,7 @@ def test_query_headless_invokes_claude_through_shell(tmp_path, monkeypatch):
 def test_query_headless_accepts_nested_cost_usage(tmp_path, monkeypatch):
     script = tmp_path / "nested_cost_headless.py"
     script.write_text(
-        "\n".join(
-            [
-                "import json",
-                "import sys",
-                "from pathlib import Path",
-                "if '--check' in sys.argv:",
-                "    raise SystemExit(0)",
-                "Path(sys.argv[sys.argv.index('--prompt-file') + 1]).exists() or sys.exit(2)",
-                "print('content')",
-                "print(json.dumps({'usage': {'inputTokens': 1, 'outputTokens': 2, 'reasoningOutputTokens': 3, 'cost': {'input': 0.01, 'output': 0.02, 'total': 0.03}}}))",
-            ]
-        ),
+        "import json\nimport sys\nfrom pathlib import Path\nif '--check' in sys.argv:\n    raise SystemExit(0)\nPath(sys.argv[sys.argv.index('--prompt-file') + 1]).exists() or sys.exit(2)\nprint('content')\nprint(json.dumps({'usage': {'inputTokens': 1, 'outputTokens': 2, 'reasoningOutputTokens': 3, 'cost': {'input': 0.01, 'output': 0.02, 'total': 0.03}}}))",
         encoding="utf-8",
     )
     monkeypatch.setenv("SHINKA_HEADLESS_COMMAND", _fake_headless_command(script))
@@ -249,8 +171,8 @@ def test_query_headless_serializes_claude_async_calls(tmp_path, monkeypatch):
             await asyncio.sleep(0.01)
             active -= 1
             return (
-                b"content\n"
-                b'{"usage":{"inputTokens":1,"outputTokens":1,"cost":{"total":0}}}',
+                (b"content\n"
+                b'{"usage":{"inputTokens":1,"outputTokens":1,"cost":{"total":0}}}'),
                 b"",
             )
 

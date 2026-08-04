@@ -9,7 +9,6 @@ import pytest
 import shinka.cli.models as cli_models
 from shinka.env import load_shinka_dotenv as real_load_shinka_dotenv
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LLM_PRICING_CSV = REPO_ROOT / "shinka" / "llm" / "providers" / "pricing.csv"
 EMBED_PRICING_CSV = REPO_ROOT / "shinka" / "embed" / "providers" / "pricing.csv"

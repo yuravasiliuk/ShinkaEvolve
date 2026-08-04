@@ -1,10 +1,10 @@
-import sys
 import sqlite3
+import sys
 from pathlib import Path
 from types import ModuleType
 
 markdown_stub = ModuleType("markdown")
-setattr(markdown_stub, "markdown", lambda text: text)
+setattr(markdown_stub, "markdown", lambda text: text)  # noqa: B010
 sys.modules.setdefault("markdown", markdown_stub)
 
 

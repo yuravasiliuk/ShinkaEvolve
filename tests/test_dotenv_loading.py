@@ -1,8 +1,8 @@
 import importlib
 import os
 import sys
-from types import ModuleType
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 

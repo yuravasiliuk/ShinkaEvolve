@@ -12,6 +12,7 @@ import pytest
 from shinka.core import EvolutionConfig
 from shinka.core.async_runner import ShinkaEvolveRunner
 from shinka.llm import subscription_usage
+from shinka.llm.providers.headless import query_headless
 from shinka.llm.subscription_usage import (
     SubscriptionLimitError,
     SubscriptionUsage,
@@ -24,7 +25,6 @@ from shinka.llm.subscription_usage import (
     record_limit_hit,
     set_limit_pause_until,
 )
-from shinka.llm.providers.headless import query_headless
 
 
 @pytest.fixture(autouse=True)
@@ -132,15 +132,7 @@ def test_limit_hit_state_flow():
 def _fake_limit_cli(tmp_path: Path) -> str:
     script = tmp_path / "fake_limit_headless.py"
     script.write_text(
-        "\n".join(
-            [
-                "import sys",
-                "if '--check' in sys.argv:",
-                "    raise SystemExit(0)",
-                "sys.stderr.write('Claude AI usage limit reached|1751600000')",
-                "raise SystemExit(1)",
-            ]
-        ),
+        "import sys\nif '--check' in sys.argv:\n    raise SystemExit(0)\nsys.stderr.write('Claude AI usage limit reached|1751600000')\nraise SystemExit(1)",
         encoding="utf-8",
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR)

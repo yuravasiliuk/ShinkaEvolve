@@ -9,7 +9,6 @@ from shinka.database import DatabaseConfig
 from shinka.launch import LocalJobConfig
 from shinka.model_availability import validate_model_env_access
 
-
 _PROVIDER_ENV_VARS = (
     "ANTHROPIC_API_KEY",
     "AZURE_OPENAI_API_KEY",

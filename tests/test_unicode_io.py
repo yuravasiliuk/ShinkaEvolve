@@ -18,7 +18,7 @@ class _FakeAsyncFile:
         self._handle = None
 
     async def __aenter__(self):
-        self._handle = builtins.open(
+        self._handle = builtins.open(  # noqa: SIM115
             self._path,
             self._mode,
             encoding=self._encoding,

@@ -127,7 +127,7 @@ Updated content.
         language="markdown",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert error is None
     assert num_applied == 1

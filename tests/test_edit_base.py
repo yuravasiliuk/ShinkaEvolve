@@ -1,10 +1,9 @@
 from shinka.edit import apply_diff_patch, apply_full_patch
 from shinka.edit.apply_diff import (
-    _find_indented_match,
     _apply_indentation_to_replace,
+    _find_indented_match,
     _strip_trailing_whitespace,
 )
-
 
 patch_str = """
 <<<<<<< SEARCH
@@ -47,7 +46,7 @@ def test_edit():
         patch_str=patch_str,
         patch_dir=None,
     )
-    updated_str, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_str, num_applied, output_path, error, _patch_txt, _diff_path = result
     assert updated_str == new_str
     assert num_applied == 2
     assert output_path is None
@@ -108,7 +107,7 @@ if __name__ == "__main__":
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert output_path is None
@@ -154,7 +153,7 @@ def new_func2():
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert error is None
@@ -186,7 +185,7 @@ another_new_line()
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert error is None
     assert num_applied == 1
@@ -221,7 +220,7 @@ new_line()
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert error is None
     assert num_applied == 1
@@ -257,7 +256,7 @@ new_line()
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert error is None
     assert num_applied == 1
@@ -282,7 +281,7 @@ def new_function():
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error == "No EVOLVE-BLOCK regions found in original content"
@@ -314,7 +313,7 @@ def new_function():
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error is not None
@@ -345,7 +344,7 @@ new_code()
 # Footer
 ```"""
 
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = apply_full_patch(
+    _updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = apply_full_patch(
         patch_str=patch_content,
         original_str=original_content,
         language="python",
@@ -374,7 +373,7 @@ def old_func():
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, output_path, error, _patch_txt, _diff_path = result
 
     # extract_between returns "none" when it can't find the pattern
     # After our fix, this should be treated as an error
@@ -410,7 +409,7 @@ def new_function():
             language="python",
             verbose=False,
         )
-        updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+        updated_content, num_applied, output_path, error, _patch_txt, diff_path = result
 
         assert num_applied == 1
         assert error is None
@@ -591,7 +590,7 @@ radius = get_new_radius()
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert error is None
@@ -631,7 +630,7 @@ if new_condition:
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert error is None
@@ -667,7 +666,7 @@ y = 20
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert error is None
@@ -676,7 +675,7 @@ y = 20
     # Verify trailing whitespace is stripped
     lines = updated_content.split("\n")
     for line in lines:
-        assert line == line.rstrip(), f"Line has trailing whitespace: {repr(line)}"
+        assert line == line.rstrip(), f"Line has trailing whitespace: {line!r}"
 
 
 def test_indentation_correction_fails_gracefully():
@@ -703,7 +702,7 @@ w = 40
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error is not None
@@ -735,7 +734,7 @@ y = 20
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert error is None
@@ -771,7 +770,7 @@ y = 20
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert error is None
@@ -810,7 +809,7 @@ x = 100
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error is not None
@@ -839,7 +838,7 @@ def func():
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 1
     assert error is None
@@ -875,7 +874,7 @@ centers = compute_new_centers()
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error is not None
@@ -911,7 +910,7 @@ import json
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error is not None
@@ -944,7 +943,7 @@ new_var = 42
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error is not None
@@ -981,7 +980,7 @@ return result
         language="python",
         verbose=False,
     )
-    updated_content, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_content, num_applied, _output_path, error, _patch_txt, _diff_path = result
 
     assert num_applied == 0
     assert error is not None

@@ -1,6 +1,6 @@
 import textwrap
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pytest
 
@@ -32,17 +32,17 @@ def test_run_shinka_eval_parallel_matches_sequential(tmp_path: Path) -> None:
         """,
     )
 
-    def get_kwargs(run_idx: int) -> Dict[str, Any]:
+    def get_kwargs(run_idx: int) -> dict[str, Any]:
         return {"seed": run_idx + 1}
 
-    def aggregate_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def aggregate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         ordered_seeds = [res["seed"] for res in results]
         return {
             "combined_score": float(sum(ordered_seeds)),
             "ordered_seeds": ordered_seeds,
         }
 
-    def validate_result(result: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    def validate_result(result: dict[str, Any]) -> tuple[bool, str | None]:
         if result["seed"] % 2 == 0:
             return False, "even seed invalid"
         return True, None

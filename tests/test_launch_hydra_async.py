@@ -3,8 +3,8 @@ from __future__ import annotations
 from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
+from shinka import launch_hydra
 from shinka.configs import config_root
-import shinka.launch_hydra as launch_hydra
 
 
 class _DummyRunner:
@@ -45,9 +45,11 @@ def test_launch_hydra_uses_async_runner(monkeypatch):
 
 
 def test_default_launch_config_uses_neutral_shared_defaults():
-    with config_root() as cfgs_root:
-        with initialize_config_dir(version_base=None, config_dir=str(cfgs_root)):
-            cfg = compose(config_name="config")
+    with (
+        config_root() as cfgs_root,
+        initialize_config_dir(version_base=None, config_dir=str(cfgs_root)),
+    ):
+        cfg = compose(config_name="config")
 
     assert cfg.variant_suffix == "_default"
     assert cfg.exp_name == "shinka_circle_packing"

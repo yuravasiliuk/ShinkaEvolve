@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 import tarfile
-import tomllib
 import zipfile
+from pathlib import Path
 
 import pytest
+import tomllib
 
 import shinka
 import shinka.configs
 from shinka.cli import launch as cli_launch
 from shinka.release_check import find_ignored_archive_members
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

@@ -13,10 +13,9 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from shinka.database import DatabaseConfig, Program, ProgramDatabase
-
 
 # Allow running this file directly with `python tests/test_async_complexity_1000.py`
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -28,7 +27,7 @@ NUM_PROGRAMS = 200
 EMBEDDING_RECOMPUTE_INTERVAL = 50
 
 
-def mock_analyze_code_metrics(code: str, language: str) -> Dict[str, Any]:
+def mock_analyze_code_metrics(code: str, language: str) -> dict[str, Any]:
     """Mock complexity analyzer that simulates bounded CPU work."""
     time.sleep(0.002)
     return {
@@ -50,8 +49,8 @@ def build_program(prefix: str, idx: int) -> Program:
 
 
 async def _run_single_additions_with_complexity() -> float:
-    from shinka.database.async_dbase import AsyncProgramDatabase
     from shinka.database import async_dbase as async_dbase_module
+    from shinka.database.async_dbase import AsyncProgramDatabase
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "async_single.db"
@@ -85,8 +84,8 @@ async def _run_single_additions_with_complexity() -> float:
 
 
 async def _run_concurrent_additions_with_complexity() -> float:
-    from shinka.database.async_dbase import AsyncProgramDatabase
     from shinka.database import async_dbase as async_dbase_module
+    from shinka.database.async_dbase import AsyncProgramDatabase
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "async_concurrent.db"

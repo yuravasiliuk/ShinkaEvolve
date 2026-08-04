@@ -11,7 +11,6 @@ from shinka.embed.providers.pricing import (
     model_exists,
 )
 
-
 MODEL_NAME = "gemini-embedding-2-preview"
 
 

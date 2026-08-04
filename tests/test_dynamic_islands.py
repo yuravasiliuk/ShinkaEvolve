@@ -2,7 +2,8 @@
 
 import tempfile
 from pathlib import Path
-from shinka.database import DatabaseConfig, ProgramDatabase, Program
+
+from shinka.database import DatabaseConfig, Program, ProgramDatabase
 
 
 def test_stagnation_detection():

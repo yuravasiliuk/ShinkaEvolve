@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from shinka.llm.providers import gemini
 
 
@@ -5,7 +7,7 @@ def test_build_gemini_thinking_config_omits_budget_when_not_supported(monkeypatc
     captured = {}
 
     class ThinkingConfigNoBudget:
-        model_fields = {"include_thoughts": object()}
+        model_fields: ClassVar = {"include_thoughts": object()}
 
         def __init__(self, **kwargs):
             captured.update(kwargs)
@@ -21,7 +23,7 @@ def test_build_gemini_thinking_config_includes_budget_when_supported(monkeypatch
     captured = {}
 
     class ThinkingConfigWithBudget:
-        model_fields = {
+        model_fields: ClassVar = {
             "include_thoughts": object(),
             "thinking_budget": object(),
         }
@@ -40,7 +42,7 @@ def test_build_gemini_afc_config_sets_max_remote_calls_none(monkeypatch):
     captured = {}
 
     class AutomaticFunctionCallingConfig:
-        model_fields = {
+        model_fields: ClassVar = {
             "disable": object(),
             "maximum_remote_calls": object(),
         }

@@ -1,6 +1,5 @@
 from shinka.edit import apply_diff_patch
 
-
 patch_str_1 = """
 <<<<<<< SEARCH
 import numpy as np
@@ -147,7 +146,7 @@ def test_edit():
         patch_str=patch_str_1,
         patch_dir=None,
     )
-    updated_str, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_str, num_applied, output_path, error, _patch_txt, _diff_path = result
     print(error)
     assert num_applied == 2
     assert output_path is None
@@ -160,7 +159,7 @@ def test_edit_2():
         patch_str=patch_str_2,
         patch_dir=None,
     )
-    updated_str, num_applied, output_path, error, patch_txt, diff_path = result
+    _updated_str, num_applied, output_path, error, _patch_txt, _diff_path = result
     print(error)
     assert num_applied == 1
     assert output_path is None
