@@ -43,22 +43,27 @@ evo:
     no matter how short `total_distance` claims to be — getting the tour
     structure right comes first.
 
-    How `combined_score` (maximized) is computed per test city set:
-    - `relative_error_score`: how close `total_distance` is to the known
-      optimal tour length (1.0 = optimal, lower as you get farther from it).
+    A tour is only scored if it is optimal: `total_distance` must match the
+    known shortest tour length for that city set. A valid but non-optimal
+    tour is rejected and scores 0 for that run, same as a malformed tour.
+
+    How `combined_score` (maximized) is computed per test city set, once the
+    tour is optimal:
     - `efficiency_penalty`: penalizes `solve_tsp` being much slower than a
       simple nearest-neighbor greedy baseline on the same input.
     - `complexity_penalty`: penalizes runtime that scales worse than
       roughly O(n) in the number of cities.
-    - combined_score = relative_error_score * (1 - (0.3 * efficiency_penalty
-      + 0.7 * complexity_penalty))
+    - combined_score = 1 - (0.3 * efficiency_penalty + 0.7 * complexity_penalty)
 
-    In short: produce tours as short as possible (close to optimal) while
-    keeping the algorithm fast, both in absolute terms and in how it scales
-    with the number of cities. Exact optimal-TSP algorithms (brute force,
-    Held-Karp) get the shortest tour but are too slow and will be penalized
-    heavily — favor good heuristics (nearest neighbor, greedy edge, 2-opt /
-    or-opt local search, etc.) over exhaustive search.
+    Test city sets range from 5 to 2000 cities. Exact optimal-TSP algorithms
+    (brute force, Held-Karp) always reach the optimal tour but are far too
+    slow past a handful of cities — favor heuristics combined with local
+    search (nearest neighbor, greedy edge, 2-opt / or-opt, etc.) that still
+    reach the exact optimum on these city sets, over exhaustive search.
+
+    In short: the tour has to be exactly optimal — once it is, the score is
+    about how fast the algorithm runs, both in absolute terms and in how it
+    scales with the number of cities.
   llm_models: ["headless/claude?effort=low"]
   # llm_models: ["openrouter/anthropic/claude-sonnet-4.5"]
   # We will probably use deepseek
@@ -82,3 +87,8 @@ db:
 
   # How many of the best-ever programs are kept as "elite" long-term
   archive_size: 40
+
+job:
+  # Safety net for the 2000-city case: a bad exponential solve_tsp would
+  # otherwise hang the eval forever instead of just scoring badly.
+  time: "00:05:00"

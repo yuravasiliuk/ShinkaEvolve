@@ -1,49 +1,51 @@
 import argparse
+import math
 import time
+
+import numpy as np
 
 from shinka.core import run_shinka_eval
 
 # shinka_run only copies evaluate.py into results_dir (not sibling files), so
 # every helper this script needs must live in this one file.
 
-OPTIMAL_DISTANCES = [
-    80.0,
-    26.0,
-]
-
-CITY_0 = [
-    [0, 10, 15, 20],
-    [10, 0, 35, 25],
-    [15, 35, 0, 30],
-    [20, 25, 30, 0],
-]
-
-CITY_1 = [
-    [0, 2, 9, 10, 7],
-    [2, 0, 6, 4, 3],
-    [9, 6, 0, 8, 5],
-    [10, 4, 8, 0, 6],
-    [7, 3, 5, 6, 0],
-]
-
-CITIES = [
-    CITY_0,
-    CITY_1,
-]
+CITY_SIZES = [5, 50, 500, 1000, 2000]
+RADIUS = 1000.0
 
 
-def calculate_relative_error_score(
-    result: tuple[list[int], float, float],
-    optimal_distance: float,
-) -> float:
+# Points placed on a circle are always in convex position, so the shortest
+# tour is guaranteed to be the one visiting them in angular order around the
+# center (any crossing tour can be shortened by uncrossing it, and angular
+# order is the only crossing-free tour). That's what lets us generate city
+# sets of any size and still know the true optimal tour length up front.
+def generate_convex_city(
+    num_cities: int, seed: int
+) -> tuple[list[list[float]], float]:
+    rng = np.random.default_rng(seed)
+    angles = rng.uniform(0.0, 2 * math.pi, size=num_cities)
+    points = np.column_stack((RADIUS * np.cos(angles), RADIUS * np.sin(angles)))
+    rng.shuffle(points)  # so city index order isn't already the optimal order
 
-    total_distance = result[1]
+    dist_matrix = np.linalg.norm(points[:, None, :] - points[None, :, :], axis=-1)
 
-    relative_error = abs(total_distance - optimal_distance) / optimal_distance
+    angular_order = np.argsort(np.arctan2(points[:, 1], points[:, 0]))
+    next_in_order = np.roll(angular_order, -1)
+    optimal_distance = float(dist_matrix[angular_order, next_in_order].sum())
 
-    score = max(0.0, 1.0 - relative_error)
+    return dist_matrix.tolist(), optimal_distance
 
-    return score
+
+CITIES = []
+OPTIMAL_DISTANCES = []
+for size in CITY_SIZES:
+    city_matrix, city_optimal_distance = generate_convex_city(size, seed=size)
+    CITIES.append(city_matrix)
+    OPTIMAL_DISTANCES.append(city_optimal_distance)
+
+CITY_OPTIMAL_DISTANCE_BY_SIZE = {
+    len(dist_matrix): optimal_distance
+    for dist_matrix, optimal_distance in zip(CITIES, OPTIMAL_DISTANCES)
+}
 
 
 def calculate_complexity_penalty(
@@ -128,12 +130,13 @@ def get_experiment_kwargs(run_idx: int) -> dict[str, object]:
     return {"dist_matrix": CITIES[run_idx]}
 
 
-# Here we validate our program. In our case we check if the algorithm visits each city exactly once and every city was visited
+# Here we validate our program. We check if the algorithm visits each city exactly once, every city was
+# visited, and the tour distance matches the known optimal distance for that city set.
 # It's True and None when everything is ok and False, "Explaining why was it invalid" when it's not
 def validate_fn(
     result: tuple[list[int], float, float],
 ) -> tuple[bool, str | None]:
-    tour = result[0]
+    tour, total_distance, _ = result
 
     # The path must return to the starting city: it has to appear twice,
     # once at the start and once at the end. Otherwise it's not a closed tour.
@@ -162,15 +165,23 @@ def validate_fn(
             details.append(f"duplicated cities {duplicates}")
         return False, f"Tour must visit each city exactly once ({', '.join(details)})"
 
+    # rel_tol, not exact equality: with up to 2000 cities, float summation
+    # order alone can shift the total by a bit even for the same tour.
+    optimal_distance = CITY_OPTIMAL_DISTANCE_BY_SIZE[city_places_count]
+    if not math.isclose(total_distance, optimal_distance, rel_tol=1e-6):
+        return False, (
+            f"Tour distance {total_distance} is not optimal "
+            f"(optimal={optimal_distance})"
+        )
+
     return True, None
 
 
 def evaluate_run(run_idx, result):
     t_pen = calculate_efficiency_penalty(result, run_idx)
     c_pen = calculate_complexity_penalty(result)
-    r_err = calculate_relative_error_score(result, OPTIMAL_DISTANCES[run_idx])
-    score = r_err * (1 - (0.3 * t_pen + 0.7 * c_pen))
-    return score, r_err, t_pen, c_pen
+    score = 1 - (0.3 * t_pen + 0.7 * c_pen)
+    return score, t_pen, c_pen
 
 
 # This is the most important function. Here we write the test to generate the score for current program.
@@ -185,7 +196,6 @@ def aggregate_metrics_fn(
 
     (
         this_generation_score,
-        relative_error_scores,
         time_penalties,
         complexity_penalties,
     ) = [sum(metric) / number_of_runs for metric in zip(*evaluations)]
@@ -200,15 +210,12 @@ def aggregate_metrics_fn(
         "public": {
             "evaluations": evaluations,
             "this_generation_score": this_generation_score,
-            "relative_error_scores": relative_error_scores,
             "time_penalties": time_penalties,
             "complexity_penalties": complexity_penalties,
         },
         # It's a small object with data stored in metrics.json, metrics are for us, not LLM
         # We put here anything we want to track
-        "private": {
-            "relative_error_scores": relative_error_scores,
-        },
+        "private": {},
         "extra_data": {},  # A little different "private", we don't use it
         "text_feedback": "",  # must be enabled, we don't use it
     }
@@ -221,7 +228,7 @@ def main(program_path: str, results_dir: str) -> None:
         program_path=program_path,
         results_dir=results_dir,
         experiment_fn_name="tsp_problem",
-        # This is the number the particular instance of the code will run. So ex. code from initial.py in generation 0 will run 3 times
+        # This is the number the particular instance of the code will run. So ex. code from initial.py in generation 0 will run 5 times
         # This way we can in each different run provide a different city to test in a get_experiment_kwargs function.
         num_runs=len(CITIES),
         get_experiment_kwargs=get_experiment_kwargs,
