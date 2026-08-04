@@ -1330,12 +1330,38 @@ class ProgramDatabase:
             correct_count = self.cursor.fetchone()["cnt"]
 
             if correct_count > 0:
-                # There are correct programs, just not in all islands yet
-                # Use initial program (first program in database)
-                self.cursor.execute(
-                    "SELECT * FROM programs ORDER BY timestamp ASC LIMIT 1"
+                # There are correct programs, but not in every island yet.
+                # Target the lowest-indexed island still missing a correct
+                # program, using ITS earliest program as the fix parent -
+                # NOT the globally-earliest program, which may belong to an
+                # island that is already initialized and would otherwise
+                # starve every other island forever (every child inherits
+                # its parent's island, so always picking a program from an
+                # already-initialized island means no other island ever
+                # receives a proposal).
+                num_islands = getattr(self.config, "num_islands", 0)
+                islands_with_correct = set(
+                    self.island_manager.get_initialized_islands()
                 )
-                row = self.cursor.fetchone()
+                islands_without_correct = [
+                    i for i in range(num_islands) if i not in islands_with_correct
+                ]
+                row = None
+                if islands_without_correct:
+                    target_island = min(islands_without_correct)
+                    self.cursor.execute(
+                        "SELECT * FROM programs WHERE island_idx = ? "
+                        "ORDER BY timestamp ASC LIMIT 1",
+                        (target_island,),
+                    )
+                    row = self.cursor.fetchone()
+                if not row:
+                    # Fallback: target island has no program yet (e.g. island
+                    # copies not created). Use the globally-earliest program.
+                    self.cursor.execute(
+                        "SELECT * FROM programs ORDER BY timestamp ASC LIMIT 1"
+                    )
+                    row = self.cursor.fetchone()
                 if not row:
                     raise RuntimeError("No programs found in database")
                 parent = self._program_from_row(row)
@@ -1343,8 +1369,8 @@ class ProgramDatabase:
                     raise RuntimeError("Failed to load initial program")
                 needs_fix = not parent.correct
                 logger.info(
-                    f"Not all islands initialized. "
-                    f"Using initial program {parent.id} (needs_fix={needs_fix})."
+                    f"Not all islands initialized. Using program {parent.id} "
+                    f"from island {parent.island_idx} (needs_fix={needs_fix})."
                 )
             else:
                 # No correct programs exist - randomly sample from incorrect

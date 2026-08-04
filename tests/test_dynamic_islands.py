@@ -315,10 +315,71 @@ def test_spawn_strategies():
         print(f"✓ Strategy '{strategy}' test passed!")
 
 
+def test_fix_mode_targets_uninitialized_island():
+    """FIX MODE must target an island still missing a correct program,
+    not always fall back to the globally-earliest program in the DB."""
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test_fix_mode_islands.db"
+
+        config = DatabaseConfig(
+            db_path=str(db_path),
+            num_islands=2,
+        )
+
+        db = ProgramDatabase(config=config, embedding_model="", read_only=False)
+
+        # First program added: island 0's initial (naive) program, globally
+        # earliest. Adding it triggers ProgramDatabase's own island-copy
+        # mechanism, which auto-creates a matching copy for island 1 (this
+        # mirrors real shinka_run behavior, "Creating copies of initial
+        # program ... for all islands").
+        root = Program(
+            id="root",
+            code="def root(): return 0",
+            correct=False,
+            combined_score=0.0,
+            generation=0,
+            island_idx=0,
+        )
+        db.add(root)
+
+        island_populations = db.island_manager.get_island_populations()
+        assert island_populations.get(1, 0) >= 1, (
+            f"Expected island 1 to have its own copy of the initial program, "
+            f"got populations: {island_populations}"
+        )
+
+        # Island 0 gets fixed first.
+        fixed_child = Program(
+            id="fixed_child",
+            code="def fixed(): return 1",
+            correct=True,
+            combined_score=1.0,
+            generation=1,
+            parent_id="root",
+        )
+        db.add(fixed_child)
+
+        # Island 1 has no correct program yet, so FIX MODE must target it
+        # (island 1's own program), not island 0's already-fixed lineage.
+        parent, _, _, needs_fix = db.sample_with_fix_mode()
+
+        assert needs_fix, "Should still be in fix mode (island 1 not fixed yet)"
+        assert parent.island_idx == 1, (
+            f"Expected FIX MODE to target island 1 (still uninitialized), "
+            f"got island {parent.island_idx} (program {parent.id})"
+        )
+
+        db.close()
+        print("✓ FIX MODE targets uninitialized island test passed!")
+
+
 if __name__ == "__main__":
     test_stagnation_detection()
     test_dynamic_island_spawning()
     test_no_spawning_when_disabled()
     test_stagnation_reset_on_improvement()
     test_spawn_strategies()
+    test_fix_mode_targets_uninitialized_island()
     print("\n✓ All dynamic island tests passed!")
