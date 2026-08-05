@@ -12,6 +12,13 @@ from shinka.core import run_shinka_eval
 CITY_SIZES = [5, 50, 500, 1000, 2000]
 RADIUS = 1000.0
 
+# How far above the true optimum a tour may be and still validate/score.
+# Loosened from "must exactly match" so heuristics that get close but don't
+# guarantee optimality (GA, Or-opt, simulated annealing, ...) have room to
+# survive selection instead of being zeroed the first time they land on a
+# non-optimal tour.
+OPTIMALITY_TOLERANCE = 0.05  # 5% above the known optimal tour length
+
 
 # Points placed on a circle are always in convex position, so the shortest
 # tour is guaranteed to be the one visiting them in angular order around the
@@ -98,6 +105,25 @@ def naive_tsp(dist_matrix: list[list[float]]) -> float:
     return elapsed
 
 
+# Penalizes total_distance for being above the known optimum: 0 at exactly
+# optimal, scaling up to 1 right at the OPTIMALITY_TOLERANCE boundary (the
+# validate_fn cutoff), so tours within the tolerance window are scored by how
+# close to optimal they are instead of all being treated as equally correct.
+def calculate_distance_penalty(
+    result: tuple[list[int], float, float], run_idx: int
+) -> float:
+    _, total_distance, _ = result
+    optimal_distance = OPTIMAL_DISTANCES[run_idx]
+
+    if optimal_distance <= 0:
+        return 0.0
+
+    excess_ratio = max(0.0, (total_distance - optimal_distance) / optimal_distance)
+    penalty = min(1.0, excess_ratio / OPTIMALITY_TOLERANCE)
+
+    return round(penalty, 4)
+
+
 # Function that returns penalty for a particular result from 0 to 1
 def calculate_efficiency_penalty(
     result: tuple[list[int], float, float], run_idx: int
@@ -165,23 +191,29 @@ def validate_fn(
             details.append(f"duplicated cities {duplicates}")
         return False, f"Tour must visit each city exactly once ({', '.join(details)})"
 
-    # rel_tol, not exact equality: with up to 2000 cities, float summation
-    # order alone can shift the total by a bit even for the same tour.
     optimal_distance = CITY_OPTIMAL_DISTANCE_BY_SIZE[city_places_count]
-    if not math.isclose(total_distance, optimal_distance, rel_tol=1e-6):
+    max_allowed_distance = optimal_distance * (1 + OPTIMALITY_TOLERANCE)
+
+    # rel_tol guards against float summation noise (up to 2000 cities) pushing
+    # a tour right at the tolerance boundary just over the line.
+    if total_distance > max_allowed_distance and not math.isclose(
+        total_distance, max_allowed_distance, rel_tol=1e-6
+    ):
         return False, (
-            f"Tour distance {total_distance} is not optimal "
-            f"(optimal={optimal_distance})"
+            f"Tour distance {total_distance} is more than "
+            f"{OPTIMALITY_TOLERANCE:.0%} above the known optimal "
+            f"({optimal_distance}, max allowed {max_allowed_distance})"
         )
 
     return True, None
 
 
 def evaluate_run(run_idx, result):
+    d_pen = calculate_distance_penalty(result, run_idx)
     t_pen = calculate_efficiency_penalty(result, run_idx)
     c_pen = calculate_complexity_penalty(result)
-    score = 1 - (0.3 * t_pen + 0.7 * c_pen)
-    return score, t_pen, c_pen
+    score = 1 - (0.5 * d_pen + 0.15 * t_pen + 0.35 * c_pen)
+    return score, d_pen, t_pen, c_pen
 
 
 # This is the most important function. Here we write the test to generate the score for current program.
@@ -196,6 +228,7 @@ def aggregate_metrics_fn(
 
     (
         this_generation_score,
+        distance_penalties,
         time_penalties,
         complexity_penalties,
     ) = [sum(metric) / number_of_runs for metric in zip(*evaluations)]
@@ -210,6 +243,7 @@ def aggregate_metrics_fn(
         "public": {
             "evaluations": evaluations,
             "this_generation_score": this_generation_score,
+            "distance_penalties": distance_penalties,
             "time_penalties": time_penalties,
             "complexity_penalties": complexity_penalties,
         },

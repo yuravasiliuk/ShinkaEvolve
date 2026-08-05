@@ -43,27 +43,38 @@ evo:
     no matter how short `total_distance` claims to be — getting the tour
     structure right comes first.
 
-    A tour is only scored if it is optimal: `total_distance` must match the
-    known shortest tour length for that city set. A valid but non-optimal
-    tour is rejected and scores 0 for that run, same as a malformed tour.
+    A tour must be within 5% of the known shortest tour length for that city
+    set to be scored at all. Anything farther from optimal than that is
+    rejected and scores 0 for that run, same as a malformed tour. Inside that
+    5% window you do NOT need to be exactly optimal — being closer to
+    optimal scores higher, so there is room for heuristics that reliably get
+    close without proving optimality (genetic algorithms, simulated
+    annealing, Or-opt, etc.), not just ones that guarantee the exact optimum.
 
     How `combined_score` (maximized) is computed per test city set, once the
-    tour is optimal:
+    tour is valid:
+    - `distance_penalty`: penalizes `total_distance` for being above the
+      known optimal — 0 at exactly optimal, scaling up to 1 right at the 5%
+      cutoff.
     - `efficiency_penalty`: penalizes `solve_tsp` being much slower than a
       simple nearest-neighbor greedy baseline on the same input.
     - `complexity_penalty`: penalizes runtime that scales worse than
       roughly O(n) in the number of cities.
-    - combined_score = 1 - (0.3 * efficiency_penalty + 0.7 * complexity_penalty)
+    - combined_score = 1 - (0.5 * distance_penalty + 0.15 * efficiency_penalty
+      + 0.35 * complexity_penalty)
 
     Test city sets range from 5 to 2000 cities. Exact optimal-TSP algorithms
     (brute force, Held-Karp) always reach the optimal tour but are far too
-    slow past a handful of cities — favor heuristics combined with local
-    search (nearest neighbor, greedy edge, 2-opt / or-opt, etc.) that still
-    reach the exact optimum on these city sets, over exhaustive search.
+    slow past a handful of cities. Local search (nearest neighbor, greedy
+    edge, 2-opt / or-opt) reliably lands exactly on optimum for these city
+    sets, which maximizes distance_penalty but still costs on speed —
+    approaches that trade a little tour quality for a lot of speed (or vice
+    versa) are worth exploring too, since distance, efficiency, and
+    complexity all trade off in the score.
 
-    In short: the tour has to be exactly optimal — once it is, the score is
-    about how fast the algorithm runs, both in absolute terms and in how it
-    scales with the number of cities.
+    In short: get within 5% of optimal to be scored at all, then the score
+    rewards being closer to optimal AND running fast, both in absolute terms
+    and in how runtime scales with the number of cities.
   llm_models: ["openrouter/deepseek/deepseek-chat"]
   # llm_models: ["openrouter/deepseek/deepseek-r1"]  # 404: no OpenRouter callers via /v1/responses for this account
   # llm_models: ["headless/claude?effort=low"]
@@ -75,8 +86,11 @@ evo:
   # full  = rewrite the whole EVOLVE-BLOCK from scratch
   # cross = combine two parent/inspiration programs
   # Probabilities must sum to 1.0.
+  # Weighted toward full/cross (vs. the old 0.6/0.3/0.1) so runs explore
+  # genuinely different algorithms more often instead of only refining
+  # whichever approach first reached a passing score via incremental diffs.
   patch_types: ["diff", "full", "cross"]
-  patch_type_probs: [0.6, 0.3, 0.1]
+  patch_type_probs: [0.35, 0.45, 0.2]
 
   # If program fails, how many times to retry
   max_patch_resamples: 3
