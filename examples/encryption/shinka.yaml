@@ -18,34 +18,66 @@ db_config:
 
 evo_config:
   task_sys_msg: |
-    Design a novel reversible byte encryption transform and maximize 
-    combined_score. Implement encrypt(data, importance, key) anddecrypt(data, importance, key)
-    inside the evolve block.
+    Goal: invent a NEW reversible byte encryption transform that maximizes
+    combined_score. Fitness is zero unless the candidate is encryption-
+    functionally correct (not just round-tripping).
 
-    Use original arithmetic, bitwise operations, rotations, permutations and generated lookup tables. 
-    Do not import or call cryptographic, hashing, compression, encoding, random, or third-party libraries.
-    Decryptuon must exacty recover every byte and importance must be validated in [0,1].
-    Prefer diffusion accros the whole message while keeping runtime and output size low.
-    Prefer nonlinear, non-deterministic constructions with nonce support, at least 8 rounds 
-    using both forward and backward passes with evolving internal state, 
-    while avoiding linear-only or simple XOR-based transformations.
+    Public API (keep exactly):
+      encrypt(data, importance, key) -> bytes
+      decrypt(data, importance, key) -> bytes
+      _encrypt_with_nonce(data, importance, key, nonce) -> bytes
+    Implement them inside the evolve block. Ciphertext from
+    _encrypt_with_nonce MUST begin with the supplied nonce so avalanche
+    measurements are reproducible. Public encrypt() must draw a fresh
+    nonce via os.urandom only (no other random/crypto libs).
+
+    Correctness (hard gate — all required):
+    - exact byte recovery on empty, boundary, all-byte, and full-input probes
+    - non-empty ciphertext must not equal plaintext (no identity transform)
+    - decrypt with a wrong key must NOT silently recover the plaintext
+      (raising is fine; recovering the original bytes is not)
+    - different nonces must change the ciphertext PAYLOAD, not only the
+      framing prefix
+    - two encrypt() calls on the same non-empty data must differ
+    - importance must be validated in [0, 1]
+    - no imports of hashlib, cryptography, Crypto, Cryptodome, nacl, fernet,
+      or other cryptographic/hashing libraries (static check)
+
+    Novelty (search pressure — treat as mandatory intent):
+    - Prefer a DIFFERENT algorithmic family from the parent and from common
+      textbook ciphers. Do NOT drop in AES, ChaCha20, Salsa20, Speck, Simon,
+      Blowfish, or a stock Feistel/ARX layout copied from memory.
+    - Do NOT merely micro-optimize the parent (rename locals, cache a table,
+      tweak round counts) when diffusion is already near-saturated. If the
+      parent is a bidirectional S-box/ARX mixer, switch family rather than
+      polishing it.
+    - Inspiration categories (not templates to copy): lag-based reciprocal
+      maps, keyed Latin-square layers, sponge-like absorbing permutations,
+      carry-save reversible networks, custom multi-pass bit-slice mixes,
+      invertible polynomial layers over GF(2^8) with original structure.
+    - On a full rewrite, state a one-line hypothesis for why the NEW family
+      should improve avalanche or key sensitivity before coding.
+    - Keep output size close to input+nonce; prefer diffusion across the
+      whole message. Nonlinear multi-round designs with evolving internal
+      state beat linear-only or plain XOR streams.
 
   patch_types:
     - diff
-    - full 
+    - full
   patch_type_probs:
-    - 0.7
-    - 0.3
+    - 0.5
+    - 0.5
   max_patch_resamples: 2
   max_patch_attempts: 2
-  max_novelty_attempts: 1
+  max_novelty_attempts: 2
   llm_models:
     - "headless/codex@gpt-5.5?effort=high"
   llm_dynamic_selection: fixed
   llm_kwargs:
     temperatures:
-      - 0.2
-      - 0.7
+      - 0.5
+      - 0.85
+      - 1.0
     max_tokens: 8192
     reasoning_efforts:
       - high
