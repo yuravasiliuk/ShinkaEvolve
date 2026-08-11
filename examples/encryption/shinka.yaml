@@ -1,0 +1,69 @@
+max_evaluation_jobs: 2
+max_proposal_jobs: 1
+max_db_workers: 2
+verbose: true
+
+job_config:
+  time: "00:05:00"
+  extra_cmd_args:
+    text: "Shinka evolves encryption."
+    importance: 0.7
+    key: "local-demo-key-#123%45#67%89!!"
+
+db_config:
+  num_islands: 2
+  archive_size: 12
+  num_archive_inspirations: 2
+  num_top_k_inspirations: 2
+
+evo_config:
+  task_sys_msg: |
+    Design a reversible byte-oriented encryption transform and maximize
+    combined_score. Only modify code inside the EVOLVE-BLOCK-START / EVOLVE-BLOCK-END
+    region in initial.py.
+
+    Implement these functions exactly:
+      - encrypt(data: bytes, importance: float, key: bytes) -> bytes
+      - decrypt(data: bytes, importance: float, key: bytes) -> bytes
+      - _encrypt_with_nonce(data: bytes, importance: float, key: bytes, nonce: bytes) -> bytes
+
+    Requirements:
+      - encrypt/decrypt must round-trip every input exactly.
+      - Outputs must always be bytes.
+      - No value may be written to bytes/bytearray outside range 0-255.
+      - If you build bytes from integers, mask each value with & 0xFF.
+      - _encrypt_with_nonce must prefix the ciphertext with the supplied nonce.
+      - The ciphertext can expand, but no more than 8x input length.
+      - Importance is in [0.0, 1.0] and may be used to balance diffusion vs speed.
+      - Use reversible arithmetic, bit operations, rotations, permutations, evolving state,
+        round constants and nonce mixing.
+      - Avoid imports of hashlib, cryptography, crypto.*, pycryptodome, nacl, fernet,
+        compression, encoding, random, or third-party libraries.
+      - Prefer nonlinear and well-mixed transforms with at least 8 rounds,
+        forward and backward passes, and robust diffusion.
+
+      - Do not use simple XOR-only repeat-stream ciphers or fixed byte substitutions.
+      - Do not assume data is text; operate on arbitrary bytes.
+
+    Keep runtime and output size reasonable while maximizing diffusion and exact recovery.
+
+  llm_models:
+    - openrouter/anthropic/claude-sonnet-4
+  llm_dynamic_selection: fixed
+  patch_types:
+    - diff
+    - full
+  patch_type_probs:
+    - 0.7
+    - 0.3
+  max_patch_resamples: 2
+  max_patch_attempts: 2
+  max_novelty_attempts: 1
+  llm_kwargs:
+    temperatures:
+      - 0.2
+      - 0.7
+    max_tokens: 2048
+    reasoning_efforts:
+      - high
+  embedding_model: null

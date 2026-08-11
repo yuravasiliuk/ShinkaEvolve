@@ -4,9 +4,12 @@ import difflib
 import logging
 from typing import Union, Optional, List, Tuple
 
+
 from shinka.utils.languages import get_language_extension
 
+
 logger = logging.getLogger(__name__)
+
 
 PATCH_PATTERN = re.compile(
     r"<{7}\s*SEARCH\s*\n(.*?)\n\s*={7}\s*\n(.*?)\n\s*>{7}\s*REPLACE\s*",
@@ -14,12 +17,17 @@ PATCH_PATTERN = re.compile(
 )
 
 
+
+
 EVOLVE_START = re.compile(r"(?:#|//|!|)?\s*EVOLVE-BLOCK-START")
 EVOLVE_END = re.compile(r"(?:#|//|!|)?\s*EVOLVE-BLOCK-END")
 
 
+
+
 def _mutable_ranges(text: str) -> list[tuple[int, int]]:
     """Return index ranges that are legal to edit.
+
 
     Handles both sequential and nested EVOLVE-BLOCK markers correctly by
     processing all markers in position order.
@@ -31,8 +39,10 @@ def _mutable_ranges(text: str) -> list[tuple[int, int]]:
     for m in EVOLVE_END.finditer(text):
         markers.append((m.start(), "end"))  # mutable ends *before* END line
 
+
     # Sort by position to handle both sequential and nested blocks
     markers.sort(key=lambda x: x[0])
+
 
     # Process in order using a stack for nesting support
     spans = []
@@ -44,7 +54,10 @@ def _mutable_ranges(text: str) -> list[tuple[int, int]]:
             start = stack.pop()
             spans.append((start, pos))
 
+
     return spans
+
+
 
 
 def _inside(span: tuple[int, int], ranges: list[tuple[int, int]]) -> bool:
@@ -52,9 +65,63 @@ def _inside(span: tuple[int, int], ranges: list[tuple[int, int]]) -> bool:
     return any(span[0] >= a and span[1] <= b for a, b in ranges)
 
 
+
+
 def _strip_trailing_whitespace(text: str) -> str:
     """Strip trailing whitespace from each line in the text."""
     return "\n".join(line.rstrip() for line in text.splitlines())
+
+
+
+
+def _strip_wrapping_code_fence(text: str) -> str:
+    """Remove a Markdown fence that wraps a SEARCH or REPLACE payload.
+
+
+    Models occasionally put ```python inside the diff delimiters despite the
+    requested format.  Only a fence wrapping the entire payload is removed;
+    embedded fences remain ordinary searchable text.
+    """
+    lines = text.splitlines()
+    if len(lines) >= 2 and re.fullmatch(r"\s*```[\w.+-]*\s*", lines[0]):
+        if re.fullmatch(r"\s*```\s*", lines[-1]):
+            return "\n".join(lines[1:-1])
+    return text
+
+
+
+
+def _find_blank_line_insensitive_match(
+    search_text: str,
+    original_text: str,
+    mutable_ranges: list[tuple[int, int]],
+) -> tuple[str, int]:
+    """Find one editable exact-line match while tolerating blank-line drift.
+
+
+    Non-empty lines, their indentation, and their order must still match
+    exactly.  The fallback is accepted only when it identifies one unique
+    editable span, preventing an ambiguous patch from changing the wrong code.
+    """
+    significant_lines = [line for line in search_text.splitlines() if line.strip()]
+    if not significant_lines:
+        return "", -1
+
+
+    separator = r"$\n(?:[ \t]*\n)*^"
+    pattern = r"(?m)^" + separator.join(
+        re.escape(line) for line in significant_lines
+    ) + r"$"
+    matches: list[re.Match[str]] = []
+    for match in re.finditer(pattern, original_text):
+        if _inside(match.span(), mutable_ranges):
+            matches.append(match)
+    if len(matches) != 1:
+        return "", -1
+    match = matches[0]
+    return match.group(0), match.start()
+
+
 
 
 def _find_indented_match(search_text: str, original_text: str) -> tuple[str, int]:
@@ -66,19 +133,23 @@ def _find_indented_match(search_text: str, original_text: str) -> tuple[str, int
     if not search_text.strip():
         return "", -1
 
+
     # First try exact match
     pos = original_text.find(search_text)
     if pos != -1:
         return search_text, pos
+
 
     # If not found, try to find the first line with different indentation
     search_lines = search_text.splitlines()
     if not search_lines:
         return "", -1
 
+
     first_search_line = search_lines[0].strip()
     if not first_search_line:
         return "", -1
+
 
     # Look for the first line in the original text
     original_lines = original_text.splitlines()
@@ -87,6 +158,7 @@ def _find_indented_match(search_text: str, original_text: str) -> tuple[str, int
             # Found a potential match, get its indentation
             line_indent = len(line) - len(line.lstrip())
             indent_str = line[:line_indent]
+
 
             # Apply this indentation to all lines in search_text
             indented_search_lines = []
@@ -104,14 +176,19 @@ def _find_indented_match(search_text: str, original_text: str) -> tuple[str, int
                     else:  # Empty line
                         indented_search_lines.append("")
 
+
             indented_search = "\n".join(indented_search_lines)
+
 
             # Check if this indented version exists in original
             indented_pos = original_text.find(indented_search)
             if indented_pos != -1:
                 return indented_search, indented_pos
 
+
     return "", -1
+
+
 
 
 def _apply_indentation_to_replace(replace_text: str, indent_str: str) -> str:
@@ -119,8 +196,10 @@ def _apply_indentation_to_replace(replace_text: str, indent_str: str) -> str:
     if not replace_text.strip():
         return replace_text
 
+
     replace_lines = replace_text.splitlines()
     indented_replace_lines = []
+
 
     for line in replace_lines:
         if line.strip():  # Non-empty line
@@ -130,7 +209,10 @@ def _apply_indentation_to_replace(replace_text: str, indent_str: str) -> str:
         else:  # Empty line
             indented_replace_lines.append("")
 
+
     return "\n".join(indented_replace_lines)
+
+
 
 
 def _clean_evolve_markers(text: str) -> str:
@@ -150,18 +232,24 @@ def _clean_evolve_markers(text: str) -> str:
         r"^\s*EVOLVE-BLOCK-END\s*$",  # Plain text
     ]
 
+
     cleaned_text = text
     markers_found = False
+
 
     for pattern in patterns_to_remove:
         if re.search(pattern, cleaned_text, flags=re.MULTILINE):
             markers_found = True
             cleaned_text = re.sub(pattern, "", cleaned_text, flags=re.MULTILINE)
 
+
     if markers_found:
         logger.debug("Removed EVOLVE-BLOCK markers from patch text")
 
+
     return cleaned_text
+
+
 
 
 def redact_immutable(text: str, no_state: bool = False) -> str:
@@ -176,8 +264,12 @@ def redact_immutable(text: str, no_state: bool = False) -> str:
     return "".join(out)
 
 
+
+
 class PatchError(RuntimeError):
     pass
+
+
 
 
 def _find_similar_lines(
@@ -186,26 +278,33 @@ def _find_similar_lines(
     """Find similar lines in the original text for suggestions."""
     import difflib
 
+
     search_line_clean = search_line.strip()
     if not search_line_clean:
         return []
 
+
     original_lines = original_text.splitlines()
     similarities = []
+
 
     for i, line in enumerate(original_lines):
         line_clean = line.strip()
         if not line_clean:
             continue
 
+
         # Calculate similarity ratio
         ratio = difflib.SequenceMatcher(None, search_line_clean, line_clean).ratio()
         if ratio > 0.6:  # Only suggest lines with >60% similarity
             similarities.append((line, i + 1, ratio))
 
+
     # Sort by similarity and return top suggestions
     similarities.sort(key=lambda x: x[2], reverse=True)
     return [(line, line_num) for line, line_num, _ in similarities[:max_suggestions]]
+
+
 
 
 def _find_best_match_with_diff(
@@ -214,38 +313,48 @@ def _find_best_match_with_diff(
     """Find the best matching block and return a diff comparison."""
     import difflib
 
+
     search_lines = search_text.strip().splitlines()
     if not search_lines:
         return None
 
+
     original_lines = original_text.splitlines()
     search_len = len(search_lines)
+
 
     best_match = None
     best_ratio = 0.0
     best_start_line = 0
 
+
     # Look for the best matching block of the same length
     for i in range(len(original_lines) - search_len + 1):
         candidate_lines = original_lines[i : i + search_len]
+
 
         # Calculate similarity for the entire block
         candidate_text = "\n".join(candidate_lines)
         search_block = "\n".join(search_lines)
 
+
         ratio = difflib.SequenceMatcher(None, search_block, candidate_text).ratio()
+
 
         if ratio > best_ratio and ratio > 0.7:  # Require >70% similarity
             best_ratio = ratio
             best_match = candidate_lines
             best_start_line = i + 1
 
+
     if best_match is None:
         return None
+
 
     # Generate unified diff
     search_lines_labeled = [f"  {line}" for line in search_lines]
     match_lines_labeled = [f"  {line}" for line in best_match]
+
 
     diff_lines = list(
         difflib.unified_diff(
@@ -258,6 +367,7 @@ def _find_best_match_with_diff(
         )
     )
 
+
     # Remove the file headers and @@ lines for cleaner output
     clean_diff = []
     for line in diff_lines:
@@ -268,7 +378,10 @@ def _find_best_match_with_diff(
         ):
             clean_diff.append(line)
 
+
     return best_match, best_start_line, clean_diff
+
+
 
 
 def _get_context_lines(
@@ -279,6 +392,7 @@ def _get_context_lines(
     if not lines:
         return [], 0
 
+
     # Find which line the position is on
     char_count = 0
     target_line = 0
@@ -288,11 +402,15 @@ def _get_context_lines(
             break
         char_count += len(line) + 1
 
+
     start_line = max(0, target_line - context_lines)
     end_line = min(len(lines), target_line + context_lines + 1)
 
+
     context = lines[start_line:end_line]
     return context, start_line + 1
+
+
 
 
 def _get_line_position(text: str, line_num: int) -> int:
@@ -301,16 +419,20 @@ def _get_line_position(text: str, line_num: int) -> int:
     if line_num < 1 or line_num > len(lines):
         return 0
 
+
     char_pos = 0
     for i in range(line_num - 1):
         char_pos += len(lines[i])
     return char_pos
 
 
+
+
 def _char_to_line_num(text: str, char_pos: int) -> int:
     """Convert character position to line number (1-based)."""
     if char_pos < 0:
         return 1
+
 
     lines = text.splitlines(keepends=True)
     current_pos = 0
@@ -319,7 +441,10 @@ def _char_to_line_num(text: str, char_pos: int) -> int:
             return i + 1
         current_pos += len(line)
 
+
     return len(lines) if lines else 1
+
+
 
 
 def _create_search_not_found_error(
@@ -330,15 +455,19 @@ def _create_search_not_found_error(
     if not search_lines:
         return "Empty search text provided"
 
+
     first_line = search_lines[0].strip()
+
 
     # Find similar lines for suggestions
     similar_lines = _find_similar_lines(first_line, original_text)
+
 
     error_parts = [
         "SEARCH text not found in editable regions",
         "",
     ]
+
 
     # Show the search text in a more compact way
     if len(search_lines) == 1:
@@ -362,11 +491,14 @@ def _create_search_not_found_error(
             ]
         )
 
+
     # Try to find the best matching block and show a diff
     best_match_result = _find_best_match_with_diff(search_text, original_text)
 
+
     if best_match_result:
         best_match, start_line, diff_lines = best_match_result
+
 
         # Check if the match is in an editable region
         match_start_pos = _get_line_position(original_text, start_line)
@@ -374,6 +506,7 @@ def _create_search_not_found_error(
         match_span = (match_start_pos, match_start_pos + len(match_text))
         in_editable = _inside(match_span, mutable_ranges)
         region_status = "✓ editable" if in_editable else "✗ immutable"
+
 
         error_parts.extend(
             [
@@ -384,6 +517,7 @@ def _create_search_not_found_error(
             ]
         )
 
+
         error_parts.extend(diff_lines)
         error_parts.extend(
             [
@@ -391,6 +525,7 @@ def _create_search_not_found_error(
                 "",
             ]
         )
+
 
         if not in_editable:
             error_parts.extend(
@@ -400,6 +535,7 @@ def _create_search_not_found_error(
                     "",
                 ]
             )
+
 
     elif similar_lines:
         # Fallback to the old similar lines approach for single-line searches
@@ -418,6 +554,7 @@ def _create_search_not_found_error(
             error_parts.append(f"  Line {line_num}: {line_content} ({region_status})")
         error_parts.append("")
 
+
     # Show a more focused view of editable regions
     if mutable_ranges:
         error_parts.extend(
@@ -430,7 +567,9 @@ def _create_search_not_found_error(
             start_line = _char_to_line_num(original_text, start)
             end_line = _char_to_line_num(original_text, end)
 
+
             error_parts.append(f"  Region {i + 1} (lines {start_line}-{end_line}):")
+
 
             # Show a few key lines from this region
             region_text = original_text[start:end].strip()
@@ -449,10 +588,12 @@ def _create_search_not_found_error(
                         error_parts.append(f"    {line}")
                 error_parts.append("")
 
+
         if len(mutable_ranges) > 2:
             remaining = len(mutable_ranges) - 2
             error_parts.append(f"  ... and {remaining} more regions")
             error_parts.append("")
+
 
     # More actionable suggestions
     if similar_lines:
@@ -475,7 +616,10 @@ def _create_search_not_found_error(
             ]
         )
 
+
     return "\n".join(error_parts)
+
+
 
 
 def _create_evolve_block_error(
@@ -487,8 +631,10 @@ def _create_evolve_block_error(
     """Create a detailed error message for EVOLVE-BLOCK violations."""
     first_line = matched_text.splitlines()[0] if matched_text.splitlines() else ""
 
+
     # Get context around the found position
     context_lines, start_line_num = _get_context_lines(original_text, position, 3)
+
 
     error_parts = [
         "Attempted to edit outside EVOLVE-BLOCK regions",
@@ -499,10 +645,12 @@ def _create_evolve_block_error(
         "Context around found text:",
     ]
 
+
     for i, line in enumerate(context_lines):
         line_num = start_line_num + i
         marker = " >>> " if i == len(context_lines) // 2 else "     "
         error_parts.append(f"{marker}Line {line_num:3}: {line}")
+
 
     error_parts.extend(
         [
@@ -512,6 +660,7 @@ def _create_evolve_block_error(
             "Available editable regions (EVOLVE-BLOCK content):",
         ]
     )
+
 
     if mutable_ranges:
         for i, (start, end) in enumerate(mutable_ranges[:3]):
@@ -527,6 +676,7 @@ def _create_evolve_block_error(
     else:
         error_parts.append("  No EVOLVE-BLOCK regions found in the code!")
 
+
     error_parts.extend(
         [
             "Suggestions:",
@@ -536,12 +686,16 @@ def _create_evolve_block_error(
         ]
     )
 
+
     return "\n".join(error_parts)
+
+
 
 
 def _create_no_evolve_block_error(original_text: str, operation: str) -> str:
     """Create an error message when no EVOLVE-BLOCK regions are found."""
     lines = original_text.splitlines()
+
 
     error_parts = [
         f"Cannot perform {operation}: No EVOLVE-BLOCK regions found",
@@ -551,12 +705,15 @@ def _create_no_evolve_block_error(original_text: str, operation: str) -> str:
         "Current file structure:",
     ]
 
+
     # Show first few lines of the file
     for i, line in enumerate(lines[:10]):
         error_parts.append(f"  Line {i + 1:2}: {line}")
 
+
     if len(lines) > 10:
         error_parts.append(f"  ... ({len(lines) - 10} more lines)")
+
 
     error_parts.extend(
         [
@@ -581,7 +738,10 @@ def _create_no_evolve_block_error(original_text: str, operation: str) -> str:
         ]
     )
 
+
     return "\n".join(error_parts)
+
+
 
 
 def apply_search_replace(
@@ -602,12 +762,21 @@ def apply_search_replace(
         search = _clean_evolve_markers(search)
         replace = _clean_evolve_markers(replace)
 
+
+        # Recover from a common LLM formatting error where Markdown code
+        # fences are placed inside SEARCH/REPLACE delimiters.
+        search = _strip_wrapping_code_fence(search)
+        replace = _strip_wrapping_code_fence(replace)
+
+
         # Strip trailing whitespace from search and replace blocks
         search = _strip_trailing_whitespace(search)
         replace = _strip_trailing_whitespace(replace)
 
+
         # Recalculate mutable ranges based on current text state
         mutable = _mutable_ranges(new_text)
+
 
         # ── insertions ───────────────────────────────────────────────────────
         if not search.strip():  # empty SEARCH  → insertion
@@ -620,9 +789,19 @@ def apply_search_replace(
             num_applied += 1
             continue
 
+
         # ── replacements ────────────────────────────────────────────────────
         # Try to find the search text, with indentation correction if needed
         matched_search, pos = _find_indented_match(search, new_text)
+
+
+        if pos == -1:
+            matched_search, pos = _find_blank_line_insensitive_match(
+                search, new_text, mutable
+            )
+            if pos != -1:
+                logger.debug("Applied blank-line-insensitive SEARCH match")
+
 
         if pos == -1:
             if strict:
@@ -630,10 +809,12 @@ def apply_search_replace(
                 raise PatchError(msg)
             continue
 
+
         span = (pos, pos + len(matched_search))
         if not _inside(span, mutable):
             msg = _create_evolve_block_error(matched_search, pos, new_text, mutable)
             raise PatchError(msg)
+
 
         # If we found an indented match, apply same indentation to replace text
         if matched_search != search:
@@ -646,9 +827,12 @@ def apply_search_replace(
                 replace = _apply_indentation_to_replace(replace, indent_str)
                 logger.debug("Applied indentation correction to search/replace block")
 
+
         new_text = new_text.replace(matched_search, replace, 1)
         num_applied += 1
     return new_text, num_applied
+
+
 
 
 def write_git_diff(
@@ -660,6 +844,7 @@ def write_git_diff(
 ) -> Path:
     """
     Save a unified-diff (Git patch) of *filename* to *out_path*.
+
 
     Parameters
     ----------
@@ -686,6 +871,8 @@ def write_git_diff(
     return out_path
 
 
+
+
 def apply_diff_patch(
     patch_str: str,
     original_str: Optional[str] = None,
@@ -708,8 +895,10 @@ def apply_diff_patch(
     else:
         original = original_str
 
+
     # Strip trailing whitespace from original text
     original = _strip_trailing_whitespace(original)
+
 
     error_message: Optional[str] = None
     # Init with original content and 0 applied patches in case of error
@@ -717,11 +906,14 @@ def apply_diff_patch(
     num_applied: int = 0
     output_path: Optional[Path] = None
 
+
     # Strip trailing whitespace from patch text
     patch_str = _strip_trailing_whitespace(patch_str)
 
+
     # Remove EVOLVE-BLOCK markers before parsing SEARCH/REPLACE sections.
     patch_str = _clean_evolve_markers(patch_str)
+
 
     if patch_dir is not None:
         patch_dir = Path(patch_dir)
@@ -729,6 +921,7 @@ def apply_diff_patch(
         # Store the raw search/replace blocks
         patch_path = patch_dir / "search_replace.txt"
         patch_path.write_text(patch_str, "utf-8")
+
 
     try:
         # Apply the patch
@@ -740,7 +933,9 @@ def apply_diff_patch(
         # Return original content, 0 applied, no output path, error msg
         return updated_content, 0, None, error_message, None, None
 
+
     suffix = f".{get_language_extension(language)}"
+
 
     # If successful, proceed to write files if patch_dir is specified
     if patch_dir is not None:
@@ -748,9 +943,11 @@ def apply_diff_patch(
         backup_path = patch_dir / f"original{suffix}"
         backup_path.write_text(original, "utf-8")
 
+
         # Write the updated file
         output_path = patch_dir / f"main{suffix}"
         output_path.write_text(updated_content, "utf-8")
+
 
         # Write the git diff if requested
         write_git_diff(
@@ -774,3 +971,8 @@ def apply_diff_patch(
         )
     else:
         return (updated_content, num_applied, None, error_message, None, None)
+
+
+
+
+

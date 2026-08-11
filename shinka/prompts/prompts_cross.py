@@ -46,8 +46,8 @@ Here are the performance metrics of the program:
 {performance_metrics}{text_feedback_section}
 
 # Task
-
-Perform a cross-over between the code script above and the one below. Aim to combine the best parts of both code implementations that improves the score.
+Perform a cross-over between the code script above and the one below. Compare their metrics and mechanisms first. Keep only compatible components with complementary strengths and resolve conflicts
+explicitly instead of concatenating both implementations. The result must contain a coherent new algorithm, not a cosmetic mixture of parent code.
 Provide the complete new program code.
 
 IMPORTANT: Make sure your rewritten program maintains the same inputs and outputs as the original program, but with improved internal implementation.
